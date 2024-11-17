@@ -27,16 +27,33 @@ pub struct Todo {
 }
 
 impl Todo {
-    pub fn new(id: usize, text: String) -> Self {
+    pub fn new_from(id: usize, other: &Self) -> Self {
         Self {
-            id: id,
-            created_by: String::from("api"),
+            id,
+            created_by: other.created_by.to_owned(),
             create_date: Utc::now(),
             update_date: Utc::now(),
             complete: false,
-            text: text,
+            text: other.text.to_owned(),
             deleted: false,
         }
+    }
+
+    pub fn mark_deleted(&mut self) {
+        self.created_by = String::from("deleted");
+        self.update_date = Utc::now();
+        self.deleted = true;
+    }
+
+    pub fn update_from(&mut self, other: &Self) {
+        if self.deleted {
+            self.create_date = Utc::now();
+            self.created_by = other.created_by.to_owned();
+        }
+        self.update_date = Utc::now();
+        self.complete = other.complete;
+        self.text = other.text.to_owned();
+        self.deleted = false;
     }
 }
 
@@ -64,19 +81,16 @@ pub async fn todos_list(
     Ok(warp::reply::json(&todos))
 }
 
-pub async fn todos_create(db: TodoDb, mut todo: Todo) -> Result<impl warp::Reply, Infallible> {
+pub async fn todos_create(db: TodoDb, todo: Todo) -> Result<impl warp::Reply, Infallible> {
     let mut todos = db.lock().await;
-    let new_id = todos.len();
-    todo.id = new_id;
-    todo.create_date = Utc::now();
-    todo.update_date = Utc::now();
-    todo.deleted = false;
+    let id = todos.len();
+    let todo = Todo::new_from(id, &todo);
 
     let reply = warp::reply::with_status(
         warp::reply::with_header(
             warp::reply::json(&todo),
             "Location",
-            format!("todos/{}", new_id),
+            format!("todos/{}", id),
         ),
         warp::http::StatusCode::CREATED,
     );
@@ -119,14 +133,9 @@ pub async fn todos_update(
     };
     let mut return_status = warp::http::StatusCode::OK;
     if db_todo.deleted {
-        db_todo.created_by = todo.created_by;
-        db_todo.create_date = Utc::now();
-        db_todo.deleted = false;
         return_status = warp::http::StatusCode::CREATED;
     }
-    db_todo.update_date = Utc::now();
-    db_todo.complete = todo.complete;
-    db_todo.text = todo.text;
+    db_todo.update_from(&todo);
 
     Ok(warp::reply::with_status(
         warp::reply::json(&db_todo),
@@ -139,9 +148,7 @@ pub async fn todos_delete(id: usize, db: TodoDb) -> Result<impl warp::Reply, Inf
     let Some(db_todo) = todos.get_mut(id) else {
         return Ok(warp::http::StatusCode::NOT_FOUND);
     };
-    db_todo.created_by = String::from("Deleted");
-    db_todo.update_date = Utc::now();
-    db_todo.deleted = true;
+    db_todo.mark_deleted();
 
     Ok(warp::http::StatusCode::NO_CONTENT)
 }

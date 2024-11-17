@@ -1,6 +1,5 @@
 use chat_api::{todos_create, todos_delete, todos_list, todos_read, todos_update};
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
-use serde_json::map;
 use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
