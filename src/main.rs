@@ -1,14 +1,18 @@
-use tracing_subscriber::prelude::*;
+use chat_api::{todos_create, todos_delete, todos_list, todos_read, todos_update};
+use futures_util::{SinkExt, StreamExt, TryFutureExt};
+use serde_json::map;
 use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
-use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tracing_subscriber::prelude::*;
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
+
+mod chat_api;
 
 /// Our global unique user id counter.
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
@@ -34,6 +38,47 @@ async fn main() {
     // Turn our "state" into a new Filter...
     let users = warp::any().map(move || users.clone());
 
+    let db = chat_api::blank_db();
+
+    let todos = {
+        let db = db.clone();
+        warp::path!("todos")
+            .and(warp::get())
+            .and(warp::any().map(move || db.clone()))
+            .and(warp::query::<HashMap<String, String>>())
+            .and_then(todos_list)
+    }
+    .or({
+        let db = db.clone();
+        warp::path!("todos")
+            .and(warp::post())
+            .and(warp::any().map(move || db.clone()))
+            .and(warp::body::content_length_limit(1024 * 16).and(warp::body::json()))
+            .and_then(todos_create)
+    })
+    .or({
+        let db = db.clone();
+        warp::path!("todos" / usize)
+            .and(warp::get())
+            .and(warp::any().map(move || db.clone()))
+            .and_then(todos_read)
+    })
+    .or({
+        let db = db.clone();
+        warp::path!("todos" / usize)
+            .and(warp::put())
+            .and(warp::any().map(move || db.clone()))
+            .and(warp::body::content_length_limit(1024 * 16).and(warp::body::json()))
+            .and_then(todos_update)
+    })
+    .or({
+        let db = db.clone();
+        warp::path!("todos" / usize)
+            .and(warp::delete())
+            .and(warp::any().map(move || db.clone()))
+            .and_then(todos_delete)
+    });
+
     // GET /chat -> websocket upgrade
     let chat = warp::path("chat")
         // The `ws()` filter will prepare Websocket handshake...
@@ -47,7 +92,7 @@ async fn main() {
     // GET / -> index html
     //let index = warp::path::end().map(|| warp::reply::html(INDEX_HTML));
 
-    let routes = chat.or(warp::fs::dir("web"));
+    let routes = chat.or(todos).or(warp::fs::dir("web"));
 
     warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
 }
