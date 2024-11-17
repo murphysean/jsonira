@@ -115,7 +115,7 @@ pub async fn todos_read(id: usize, db: TodoDb) -> Result<impl warp::Reply, Infal
     }
     Ok(warp::reply::with_status(
         warp::reply::json(&todo),
-        warp::http::StatusCode::NOT_FOUND,
+        warp::http::StatusCode::OK,
     ))
 }
 
