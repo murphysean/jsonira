@@ -1,7 +1,10 @@
 use chrono::{Duration, Utc};
+use warp::http::{response, Response, StatusCode};
 use jsonwebtokens::{encode, Algorithm, Verifier};
+use serde::Serialize;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use warp::reply::{self, Reply};
 use std::convert::Infallible;
 use std::io::Error as IoError;
 use std::sync::Arc;
@@ -199,15 +202,28 @@ impl UserDb {
     }
 }
 
-pub async fn users_list(db: Arc<UserDb>) -> Result<impl warp::Reply, Infallible> {
+pub async fn users_list(db: Arc<UserDb>) -> Result<impl Reply, Infallible> {
     let Ok(users) = db.list_users().await else {
-        return Ok(warp::reply::with_status(
-            warp::reply::json(&SimpleErr::new(String::from("Not Found"))),
-            warp::http::StatusCode::NOT_FOUND,
+        return Ok(reply::with_status(
+            reply::json(&SimpleErr::new(String::from("Not Found"))),
+            StatusCode::NOT_FOUND,
         ));
     };
-    Ok(warp::reply::with_status(
-        warp::reply::json(&users),
-        warp::http::StatusCode::OK,
+    Ok(reply::with_status(
+        reply::json(&users),
+        StatusCode::OK,
+    ))
+}
+
+pub async fn users_read(db: Arc<UserDb>, id: i64) -> Result<impl Reply, Infallible> {
+    let Ok(user) = db.read_user(id).await else{
+        return Ok(reply::with_status(
+            reply::json(&SimpleErr::new(String::from("Not Found"))),
+            StatusCode::NOT_FOUND,
+        ));
+    }
+    Ok(reply::with_status(
+        reply::json(&user),
+        StatusCode::OK,
     ))
 }
