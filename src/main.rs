@@ -1,30 +1,16 @@
-use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update};
-use futures_util::{SinkExt, StreamExt, TryFutureExt, TryStreamExt};
+use chat_api::{user_connected, Users};
+use login_api::handle_post_login;
 use std::collections::HashMap;
-use std::convert::Infallible;
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
-};
-use tokio::sync::{mpsc, RwLock};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use std::sync::Arc;
+use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update};
 use tracing_subscriber::prelude::*;
-use users::{users_list, UserDb};
-use warp::filters::multipart::FormData;
-use warp::ws::{Message, WebSocket};
+use user_api::{users_list, UserDb};
 use warp::Filter;
 
-mod users;
+mod chat_api;
+mod login_api;
 mod todo_api;
-
-/// Our global unique user id counter.
-static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
-
-/// Our state of currently connected users.
-///
-/// - Key is their id
-/// - Value is a sender of `warp::ws::Message`
-type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>>;
+mod user_api;
 
 #[tokio::main]
 async fn main() {
@@ -109,124 +95,16 @@ async fn main() {
         let db = users_database.clone();
         warp::path("login")
             .and(warp::post())
-            .and(warp::multipart::form())
+            .and(warp::body::form())
             .and(warp::any().map(move || db.clone()))
-            .and_then(
-                |mut form: FormData, users_database: Arc<UserDb>| async move {
-                    use bytes::BufMut;
-
-                    let mut username = Some(String::new());
-                    let mut password = Some(String::new());
-
-                    let field_names: Vec<_> = form
-                        .and_then(|mut field| async move {
-                            let mut bytes: Vec<u8> = Vec::new();
-                            while let Some(content) = field.data().await {
-                                let content = content.unwrap();
-                                bytes.put(content);
-                            }
-                            Ok((
-                                field.name().to_string(),
-                                String::from_utf8_lossy(&*bytes).to_string(),
-                            ))
-                        })
-                        .try_collect()
-                        .await
-                        .unwrap();
-
-                    let mut response = warp::http::Response::builder()
-                        .status(warp::http::StatusCode::SEE_OTHER)
-                        .header("Location", "/index.html")
-                        .body("")
-                        .unwrap();
-
-                    //let response = warp::reply::with_header(warp::reply::html(warp::http::StatusCode::SEE_OTHER), "Location", "/index.html")
-
-                    //Ok::<warp::reply::Response, Infallible>(response)
-                    Ok::<_, Infallible>(response)
-                },
-            )
+            .and_then(handle_post_login)
     };
 
-    let routes = chat.or(login).or(warp_users).or(todos).or(warp::fs::dir("web"));
+    let routes = chat
+        .or(login)
+        .or(warp_users)
+        .or(todos)
+        .or(warp::fs::dir("web"));
 
     warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
-}
-
-async fn user_connected(ws: WebSocket, users: Users) {
-    // Use a counter to assign a new unique ID for this user.
-    let my_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
-
-    eprintln!("new chat user: {}", my_id);
-
-    // Split the socket into a sender and receive of messages.
-    let (mut user_ws_tx, mut user_ws_rx) = ws.split();
-
-    // Use an unbounded channel to handle buffering and flushing of messages
-    // to the websocket...
-    let (tx, rx) = mpsc::unbounded_channel();
-    let mut rx = UnboundedReceiverStream::new(rx);
-
-    tokio::task::spawn(async move {
-        while let Some(message) = rx.next().await {
-            user_ws_tx
-                .send(message)
-                .unwrap_or_else(|e| {
-                    eprintln!("websocket send error: {}", e);
-                })
-                .await;
-        }
-    });
-
-    // Save the sender in our list of connected users.
-    users.write().await.insert(my_id, tx);
-
-    // Return a `Future` that is basically a state machine managing
-    // this specific user's connection.
-
-    // Every time the user sends a message, broadcast it to
-    // all other users...
-    while let Some(result) = user_ws_rx.next().await {
-        let msg = match result {
-            Ok(msg) => msg,
-            Err(e) => {
-                eprintln!("websocket error(uid={}): {}", my_id, e);
-                break;
-            }
-        };
-        user_message(my_id, msg, &users).await;
-    }
-
-    // user_ws_rx stream will keep processing as long as the user stays
-    // connected. Once they disconnect, then...
-    user_disconnected(my_id, &users).await;
-}
-
-async fn user_message(my_id: usize, msg: Message, users: &Users) {
-    // Skip any non-Text messages...
-    let msg = if let Ok(s) = msg.to_str() {
-        s
-    } else {
-        return;
-    };
-
-    let new_msg = format!("<User#{}>: {}", my_id, msg);
-
-    // New message from this user, send it to everyone else (except same uid)...
-    for (&uid, tx) in users.read().await.iter() {
-        if my_id != uid {
-            if let Err(_disconnected) = tx.send(Message::text(new_msg.clone())) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-            }
-        }
-    }
-}
-
-async fn user_disconnected(my_id: usize, users: &Users) {
-    eprintln!("good bye user: {}", my_id);
-
-    // Stream closed up, so remove from the user list
-    users.write().await.remove(&my_id);
 }
