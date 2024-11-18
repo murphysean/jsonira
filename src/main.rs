@@ -1,5 +1,5 @@
-use chat_api::{todos_create, todos_delete, todos_list, todos_read, todos_update};
-use futures_util::{SinkExt, StreamExt, TryFutureExt};
+use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update};
+use futures_util::{SinkExt, StreamExt, TryFutureExt, TryStreamExt};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{
@@ -10,11 +10,12 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing_subscriber::prelude::*;
 use users::{users_list, UserDb};
+use warp::filters::multipart::FormData;
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
 
-mod chat_api;
 mod users;
+mod todo_api;
 
 /// Our global unique user id counter.
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
@@ -42,7 +43,7 @@ async fn main() {
 
     let users_database = Arc::new(UserDb::new().unwrap());
 
-    let db = chat_api::blank_db();
+    let db = todo_api::blank_db();
 
     let warp_users = {
         let db = users_database.clone();
@@ -104,7 +105,50 @@ async fn main() {
     // GET / -> index html
     //let index = warp::path::end().map(|| warp::reply::html(INDEX_HTML));
 
-    let routes = chat.or(warp_users).or(todos).or(warp::fs::dir("web"));
+    let login = {
+        let db = users_database.clone();
+        warp::path("login")
+            .and(warp::post())
+            .and(warp::multipart::form())
+            .and(warp::any().map(move || db.clone()))
+            .and_then(
+                |mut form: FormData, users_database: Arc<UserDb>| async move {
+                    use bytes::BufMut;
+
+                    let mut username = Some(String::new());
+                    let mut password = Some(String::new());
+
+                    let field_names: Vec<_> = form
+                        .and_then(|mut field| async move {
+                            let mut bytes: Vec<u8> = Vec::new();
+                            while let Some(content) = field.data().await {
+                                let content = content.unwrap();
+                                bytes.put(content);
+                            }
+                            Ok((
+                                field.name().to_string(),
+                                String::from_utf8_lossy(&*bytes).to_string(),
+                            ))
+                        })
+                        .try_collect()
+                        .await
+                        .unwrap();
+
+                    let mut response = warp::http::Response::builder()
+                        .status(warp::http::StatusCode::SEE_OTHER)
+                        .header("Location", "/index.html")
+                        .body("")
+                        .unwrap();
+
+                    //let response = warp::reply::with_header(warp::reply::html(warp::http::StatusCode::SEE_OTHER), "Location", "/index.html")
+
+                    //Ok::<warp::reply::Response, Infallible>(response)
+                    Ok::<_, Infallible>(response)
+                },
+            )
+    };
+
+    let routes = chat.or(login).or(warp_users).or(todos).or(warp::fs::dir("web"));
 
     warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
 }

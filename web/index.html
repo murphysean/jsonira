@@ -5,6 +5,18 @@
     </head>
     <body>
         <h1>Mrfy.io chat</h1>
+        <div id="login">
+            <form action="/login" method="post">
+            <label for="username">username:</label><br>
+            <input type="text" id="username" name="username" placeholder="Enter Username" required><br>
+            <label for="password">password:</label><br>
+            <input type="password" id="password" name="password" placeholder="Enter Password" required><br><br>
+            <button type="submit">Login</button>
+            <label>
+                <input type="checkbox" checked="checked" name="remember"> Remember me
+            </label>
+            </form>
+        </div>
         <div id="chat">
             <p><em>Connecting...</em></p>
         </div>
