@@ -1,16 +1,16 @@
 use chrono::{Duration, Utc};
-use warp::http::{response, Response, StatusCode};
 use jsonwebtokens::{encode, Algorithm, Verifier};
-use serde::Serialize;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use warp::reply::{self, Reply};
 use std::convert::Infallible;
+use std::fmt;
 use std::io::Error as IoError;
 use std::sync::Arc;
 use std::{error::Error, io::ErrorKind};
 use tokio::sync::Mutex;
 use uuid::Uuid;
+use warp::http::{response, Response, StatusCode};
+use warp::reply::{self, Reply};
 
 use sqlite::{State, Statement};
 
@@ -54,11 +54,11 @@ impl User {
         let then = Utc::now() + Duration::hours(8);
         let claims = json!({
             "iss": "https://www.mrfy.io",
-            "sub": &self.id,
+            "sub": format!("{}", &self.id),
             "aud": "https://www.mrfy.io",
-            "iat": Utc::now(),
-            "nbf": Utc::now(),
-            "exp": then,
+            "iat": Utc::now().timestamp(),
+            "nbf": Utc::now().timestamp(),
+            "exp": then.timestamp(),
             "jti": Uuid::new_v4(),
             "sid": Uuid::new_v4(),
             "name": &self.name,
@@ -67,25 +67,26 @@ impl User {
         encode(&header, &claims, &alg).unwrap()
     }
 
-    pub fn new_from_token(token: String) -> Result<User, Box<dyn Error>> {
+    pub fn new_from_token(token: String, host: String) -> Result<User, Box<dyn Error>> {
         let alg = Algorithm::new_hmac(jsonwebtokens::AlgorithmID::HS256, "secret").unwrap();
         let verifier = Verifier::create()
             .issuer("https://www.mrfy.io")
-            .audience("www.mrfy.io")
+            .audience(format!("https://{}", host))
             .build()?;
         let claims: Value = verifier.verify(&token, &alg)?;
         Ok(Self {
             id: claims
-                .get("user_id")
+                .get("sub")
                 .ok_or(Box::new(IoError::new(
                     ErrorKind::InvalidData,
                     "Invalid Data",
                 )))?
-                .as_i64()
+                .as_str()
                 .ok_or(Box::new(IoError::new(
                     ErrorKind::InvalidData,
                     "Invalid Data",
-                )))?,
+                )))?
+                .parse()?,
             username: claims
                 .get("username")
                 .ok_or(Box::new(IoError::new(
@@ -209,21 +210,15 @@ pub async fn users_list(db: Arc<UserDb>) -> Result<impl Reply, Infallible> {
             StatusCode::NOT_FOUND,
         ));
     };
-    Ok(reply::with_status(
-        reply::json(&users),
-        StatusCode::OK,
-    ))
+    Ok(reply::with_status(reply::json(&users), StatusCode::OK))
 }
 
 pub async fn users_read(db: Arc<UserDb>, id: i64) -> Result<impl Reply, Infallible> {
-    let Ok(user) = db.read_user(id).await else{
+    let Ok(user) = db.read_user(id).await else {
         return Ok(reply::with_status(
             reply::json(&SimpleErr::new(String::from("Not Found"))),
             StatusCode::NOT_FOUND,
         ));
-    }
-    Ok(reply::with_status(
-        reply::json(&user),
-        StatusCode::OK,
-    ))
+    };
+    Ok(reply::with_status(reply::json(&user), StatusCode::OK))
 }
