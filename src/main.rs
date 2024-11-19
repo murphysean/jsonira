@@ -1,9 +1,9 @@
 use chat_api::{user_connected, Users};
 use session_api::{get_current_session, handle_post_login};
-use tracing::level_filters::LevelFilter;
 use std::collections::HashMap;
 use std::sync::Arc;
 use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update};
+use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
 use user_api::{users_list, UserDb};
 use warp::Filter;
@@ -16,12 +16,13 @@ mod user_api;
 #[tokio::main]
 async fn main() {
     let console_layer = console_subscriber::spawn();
-    let fmt_layer = tracing_subscriber::fmt::layer().pretty().with_filter(LevelFilter::INFO);
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .pretty()
+        .with_filter(LevelFilter::INFO);
     tracing_subscriber::registry()
         .with(console_layer)
         .with(fmt_layer)
         .init();
-
 
     let users_database = Arc::new(UserDb::new().unwrap());
 
