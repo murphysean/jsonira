@@ -1,8 +1,9 @@
 use chat_api::{user_connected, Users};
 use session_api::{get_current_session, handle_post_login};
-use std::collections::HashMap;
 use std::sync::Arc;
-use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update};
+use std::{collections::HashMap, env};
+use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update, Todo};
+use tokio::sync::Mutex;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
 use user_api::{users_list, UserDb};
@@ -13,8 +14,26 @@ mod session_api;
 mod todo_api;
 mod user_api;
 
+/// A context that will be available at each handler
+struct MyServerContext {
+    token_secret: String,
+    user_db: Arc<UserDb>,
+    todo_db: Arc<Mutex<Vec<Todo>>>,
+}
+
+impl MyServerContext {
+    pub fn new(secret_key: String) -> Self {
+        Self {
+            token_secret: secret_key,
+            user_db: Arc::new(UserDb::new().unwrap()),
+            todo_db: todo_api::blank_db(),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
+    let secret_key = env::var("SECRET_KEY").unwrap_or(String::from("secret"));
     let console_layer = console_subscriber::spawn();
     let fmt_layer = tracing_subscriber::fmt::layer()
         .pretty()
@@ -24,12 +43,10 @@ async fn main() {
         .with(fmt_layer)
         .init();
 
-    let users_database = Arc::new(UserDb::new().unwrap());
-
-    let db = todo_api::blank_db();
+    let context = MyServerContext::new(secret_key);
 
     let warp_users = {
-        let db = users_database.clone();
+        let db = context.user_db.clone();
         warp::path!("users")
             .and(warp::get())
             .and(warp::any().map(move || db.clone()))
@@ -37,7 +54,7 @@ async fn main() {
     };
 
     let todos = {
-        let db = db.clone();
+        let db = context.todo_db.clone();
         warp::path!("api" / "todos")
             .and(warp::get())
             .and(warp::any().map(move || db.clone()))
@@ -45,7 +62,7 @@ async fn main() {
             .and_then(todos_list)
     }
     .or({
-        let db = db.clone();
+        let db = context.todo_db.clone();
         warp::path!("api" / "todos")
             .and(warp::post())
             .and(warp::any().map(move || db.clone()))
@@ -53,14 +70,14 @@ async fn main() {
             .and_then(todos_create)
     })
     .or({
-        let db = db.clone();
+        let db = context.todo_db.clone();
         warp::path!("api" / "todos" / usize)
             .and(warp::get())
             .and(warp::any().map(move || db.clone()))
             .and_then(todos_read)
     })
     .or({
-        let db = db.clone();
+        let db = context.todo_db.clone();
         warp::path!("api" / "todos" / usize)
             .and(warp::put())
             .and(warp::any().map(move || db.clone()))
@@ -68,7 +85,7 @@ async fn main() {
             .and_then(todos_update)
     })
     .or({
-        let db = db.clone();
+        let db = context.todo_db.clone();
         warp::path!("api" / "todos" / usize)
             .and(warp::delete())
             .and(warp::any().map(move || db.clone()))
@@ -92,7 +109,7 @@ async fn main() {
         });
 
     let session = {
-        let db = users_database.clone();
+        let db = context.user_db.clone();
         warp::path("session")
             .and(warp::get())
             .and(warp::any().map(move || db.clone()))
@@ -101,7 +118,7 @@ async fn main() {
             .and_then(get_current_session)
     };
     let login = {
-        let db = users_database.clone();
+        let db = context.user_db.clone();
         warp::path("login")
             .and(warp::post())
             .and(warp::body::form())

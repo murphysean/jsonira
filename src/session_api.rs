@@ -40,7 +40,7 @@ pub async fn get_current_session(
                 reply::json(&SimpleErr::new(String::from(
                     "Invalid Session, Please Login",
                 ))),
-                StatusCode::NOT_FOUND,
+                StatusCode::UNAUTHORIZED,
             ));
         }
         Ok(user) => user,

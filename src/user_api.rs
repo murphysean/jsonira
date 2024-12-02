@@ -28,10 +28,14 @@ impl SimpleErr {
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
 pub struct User {
     pub id: i64,
-    pub username: String,
-    password: Option<String>,
+    pub email: String,
 
-    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub name: Option<String>,
+
+    //Auth Attributes
+    pub groups: Option<Vec<String>>,
 }
 
 impl User {
@@ -42,9 +46,9 @@ impl User {
     fn new_from_row(statement: &mut Statement) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             id: statement.read("id")?,
-            username: statement.read("username")?,
-            password: None,
+            email: statement.read("email")?,
             name: statement.read("name")?,
+            groups: None,
         })
     }
 
@@ -62,7 +66,7 @@ impl User {
             "jti": Uuid::new_v4(),
             "sid": Uuid::new_v4(),
             "name": &self.name,
-            "username": &self.username,
+            "email": &self.email,
         });
         encode(&header, &claims, &alg).unwrap()
     }
@@ -87,8 +91,8 @@ impl User {
                     "Invalid Data",
                 )))?
                 .parse()?,
-            username: claims
-                .get("username")
+            email: claims
+                .get("email")
                 .ok_or(Box::new(IoError::new(
                     ErrorKind::InvalidData,
                     "Invalid Data",
@@ -99,19 +103,13 @@ impl User {
                     "Invalid Data",
                 )))?
                 .to_owned(),
-            password: None,
             name: claims
                 .get("name")
-                .ok_or(Box::new(IoError::new(
-                    ErrorKind::InvalidData,
-                    "Invalid Data",
-                )))?
-                .as_str()
-                .ok_or(Box::new(IoError::new(
-                    ErrorKind::InvalidData,
-                    "Invalid Data",
-                )))?
-                .to_owned(),
+                .and_then(|x| 
+                    x.as_str()
+                    .and_then(|x| Some(x.to_owned()))
+                ),
+            groups: None,
         })
     }
 }
@@ -119,7 +117,10 @@ impl User {
 pub struct UserDb {
     /// Connection to a databse
     /// This database should have a users table defined
-    /// CREATE TABLE users (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, password TEXT NOT NULL, name TEXT NOT NULL);
+    /// DEPRECATED --- CREATE TABLE users (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, password TEXT NOT NULL, name TEXT NOT NULL);
+    ///
+    /// CREATE TABLE users (id INTEGER NOT NULL PRIMARY KEY, email TEXT UNIQUE NOT NULL, salt TEXT NOT NULL, password TEXT NOT NULL, obj JSON NOT NULL);
+    /// CREATE TABLE clients (client_id TEXT NOT NULL, obj BLOB NOT NULL);
     connection: Arc<Mutex<sqlite::Connection>>,
 }
 
@@ -134,7 +135,7 @@ impl UserDb {
 
     pub async fn list_users(&self) -> Result<Vec<User>, Box<dyn Error>> {
         let connection = self.connection.lock().await;
-        static QUERY: &str = "SELECT id,username,name FROM users";
+        static QUERY: &str = "SELECT id, email, json_extract(obj, '$.name') name FROM users;";
         let mut statement = connection.prepare(QUERY)?;
 
         let mut users: Vec<User> = Vec::new();
@@ -154,16 +155,15 @@ impl UserDb {
 
     pub async fn authenticate_user(
         &self,
-        username: Option<&String>,
+        email: Option<&String>,
         password: Option<&String>,
     ) -> Result<User, Box<dyn Error>> {
         let connection = self.connection.lock().await;
-        static QUERY: &str =
-            "SELECT id,username,name FROM users WHERE username = ? AND password = ?";
+        static QUERY: &str = "SELECT id, email, json_extract(obj, '$.name') name FROM users WHERE email = ? AND password = ?;";
         let mut statement = connection.prepare(QUERY)?;
         statement.bind((
             1,
-            username
+            email
                 .ok_or(Box::new(IoError::new(ErrorKind::NotFound, "Not Found")))?
                 .as_str(),
         ))?;
@@ -184,7 +184,7 @@ impl UserDb {
     /// Reads a user from the database from their id
     pub async fn read_user(&self, id: i64) -> Result<User, Box<dyn Error>> {
         let connection = self.connection.lock().await;
-        static QUERY: &str = "SELECT id,username,name FROM users WHERE id = ?";
+        static QUERY: &str = "SELECT id,email, json_extract(obj, '$.name') name FROM users WHERE id = ?;";
         let mut statement = connection.prepare(QUERY)?;
         statement.bind((1, id))?;
 
