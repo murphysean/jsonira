@@ -133,5 +133,9 @@ async fn main() {
         .or(todos)
         .or(warp::fs::dir("web"));
 
-    warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
+    warp::serve(routes)
+    .tls()
+    .cert_path("certs/fullchain.pem")
+    .key_path("certs/privkey.pem")
+    .run(([0, 0, 0, 0], 8443)).await;
 }
