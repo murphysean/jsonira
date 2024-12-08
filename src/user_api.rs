@@ -1,3 +1,6 @@
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::Json;
 use chrono::{Duration, Utc};
 use jsonwebtokens::{encode, Algorithm, Verifier};
 use serde_derive::{Deserialize, Serialize};
@@ -9,10 +12,10 @@ use std::sync::Arc;
 use std::{error::Error, io::ErrorKind};
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use warp::http::{response, Response, StatusCode};
-use warp::reply::{self, Reply};
 
-use sqlite::{State, Statement};
+use sqlite::Statement;
+
+use crate::MyServerContext;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {
@@ -105,10 +108,7 @@ impl User {
                 .to_owned(),
             name: claims
                 .get("name")
-                .and_then(|x| 
-                    x.as_str()
-                    .and_then(|x| Some(x.to_owned()))
-                ),
+                .and_then(|x| x.as_str().and_then(|x| Some(x.to_owned()))),
             groups: None,
         })
     }
@@ -139,7 +139,7 @@ impl UserDb {
         let mut statement = connection.prepare(QUERY)?;
 
         let mut users: Vec<User> = Vec::new();
-        while let Ok(State::Row) = statement.next() {
+        while let Ok(sqlite::State::Row) = statement.next() {
             users.push(User::new_from_row(&mut statement)?);
         }
 
@@ -174,7 +174,7 @@ impl UserDb {
                 .as_str(),
         ))?;
 
-        let Ok(State::Row) = statement.next() else {
+        let Ok(sqlite::State::Row) = statement.next() else {
             return Err(Box::new(IoError::new(ErrorKind::NotFound, "Not Found")));
         };
 
@@ -184,11 +184,12 @@ impl UserDb {
     /// Reads a user from the database from their id
     pub async fn read_user(&self, id: i64) -> Result<User, Box<dyn Error>> {
         let connection = self.connection.lock().await;
-        static QUERY: &str = "SELECT id,email, json_extract(obj, '$.name') name FROM users WHERE id = ?;";
+        static QUERY: &str =
+            "SELECT id,email, json_extract(obj, '$.name') name FROM users WHERE id = ?;";
         let mut statement = connection.prepare(QUERY)?;
         statement.bind((1, id))?;
 
-        let Ok(State::Row) = statement.next() else {
+        let Ok(sqlite::State::Row) = statement.next() else {
             return Err(Box::new(IoError::new(ErrorKind::NotFound, "Not Found")));
         };
 
@@ -203,22 +204,21 @@ impl UserDb {
     }
 }
 
-pub async fn users_list(db: Arc<UserDb>) -> Result<impl Reply, Infallible> {
-    let Ok(users) = db.list_users().await else {
-        return Ok(reply::with_status(
-            reply::json(&SimpleErr::new(String::from("Not Found"))),
-            StatusCode::NOT_FOUND,
-        ));
+pub async fn users_list(
+    State(state): State<MyServerContext>,
+) -> Result<Json<Vec<User>>, StatusCode> {
+    let Ok(users) = state.user_db.list_users().await else {
+        return Err(StatusCode::NOT_FOUND);
     };
-    Ok(reply::with_status(reply::json(&users), StatusCode::OK))
+    Ok(Json(users))
 }
 
-pub async fn users_read(db: Arc<UserDb>, id: i64) -> Result<impl Reply, Infallible> {
-    let Ok(user) = db.read_user(id).await else {
-        return Ok(reply::with_status(
-            reply::json(&SimpleErr::new(String::from("Not Found"))),
-            StatusCode::NOT_FOUND,
-        ));
+pub async fn users_read(
+    State(state): State<MyServerContext>,
+    Path(id): Path<i64>,
+) -> Result<Json<User>, StatusCode> {
+    let Ok(user) = state.user_db.read_user(id).await else {
+        return Err(StatusCode::NOT_FOUND);
     };
-    Ok(reply::with_status(reply::json(&user), StatusCode::OK))
+    Ok(Json(user))
 }

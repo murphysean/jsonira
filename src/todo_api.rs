@@ -1,8 +1,15 @@
-use std::{collections::HashMap, convert::Infallible, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
+use axum::{
+    extract::{Path, Query, State},
+    http::{Response, StatusCode},
+    Json,
+};
 use chrono::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+
+use crate::MyServerContext;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {
@@ -64,13 +71,13 @@ pub fn blank_db() -> TodoDb {
 }
 
 pub async fn todos_list(
-    db: TodoDb,
-    query: HashMap<String, String>,
-) -> Result<impl warp::Reply, Infallible> {
+    State(state): State<MyServerContext>,
+    Query(query): Query<HashMap<String, String>>,
+) -> Result<Json<Vec<Todo>>, StatusCode> {
     let offset: Option<usize> = query.get("offset").and_then(|offset| offset.parse().ok());
     let limit: Option<usize> = query.get("limit").and_then(|limit| limit.parse().ok());
 
-    let todos = db.lock().await;
+    let todos = state.todo_db.lock().await;
     let todos: Vec<Todo> = todos
         .clone()
         .into_iter()
@@ -78,77 +85,69 @@ pub async fn todos_list(
         .filter(|x| x.deleted)
         .take(limit.unwrap_or(10))
         .collect();
-    Ok(warp::reply::json(&todos))
+    Ok(Json(todos))
 }
 
-pub async fn todos_create(db: TodoDb, todo: Todo) -> Result<impl warp::Reply, Infallible> {
-    let mut todos = db.lock().await;
+pub async fn todos_create(
+    State(state): State<MyServerContext>,
+    Json(todo): Json<Todo>,
+) -> Result<Response<Json<Todo>>, StatusCode> {
+    let mut todos = state.todo_db.lock().await;
     let id = todos.len();
     let todo = Todo::new_from(id, &todo);
 
-    let reply = warp::reply::with_status(
-        warp::reply::with_header(
-            warp::reply::json(&todo),
-            "Location",
-            format!("todos/{}", id),
-        ),
-        warp::http::StatusCode::CREATED,
-    );
-    todos.push(todo);
-
-    Ok(reply)
+    todos.push(todo.clone());
+    let response = Response::builder()
+        .status(StatusCode::CREATED)
+        .header("Location", format!("todos/{}", id))
+        .body(Json(todo))
+        .unwrap();
+    Ok(response)
 }
 
-pub async fn todos_read(id: usize, db: TodoDb) -> Result<impl warp::Reply, Infallible> {
-    let todos = db.lock().await;
+pub async fn todos_read(
+    State(state): State<MyServerContext>,
+    Path(id): Path<usize>,
+) -> Result<Json<Todo>, StatusCode> {
+    let todos = state.todo_db.lock().await;
     let Some(todo) = todos.get(id) else {
-        return Ok(warp::reply::with_status(
-            warp::reply::json(&SimpleErr::new(String::from("Not Found"))),
-            warp::http::StatusCode::NOT_FOUND,
-        ));
+        return Err(StatusCode::NOT_FOUND);
     };
     if todo.deleted {
-        return Ok(warp::reply::with_status(
-            warp::reply::json(&SimpleErr::new(String::from("Not Found"))),
-            warp::http::StatusCode::NOT_FOUND,
-        ));
+        return Err(StatusCode::NOT_FOUND);
     }
-    Ok(warp::reply::with_status(
-        warp::reply::json(&todo),
-        warp::http::StatusCode::OK,
-    ))
+    Ok(Json(todo.clone()))
 }
 
 pub async fn todos_update(
-    id: usize,
-    db: TodoDb,
-    todo: Todo,
-) -> Result<impl warp::Reply, Infallible> {
-    let mut todos = db.lock().await;
+    State(state): State<MyServerContext>,
+    Path(id): Path<usize>,
+    Json(todo): Json<Todo>,
+) -> Result<Response<Json<Todo>>, StatusCode> {
+    let mut todos = state.todo_db.lock().await;
     let Some(db_todo) = todos.get_mut(id) else {
-        return Ok(warp::reply::with_status(
-            warp::reply::json(&SimpleErr::new(String::from("Not Found"))),
-            warp::http::StatusCode::NOT_FOUND,
-        ));
+        return Err(StatusCode::NOT_FOUND);
     };
-    let mut return_status = warp::http::StatusCode::OK;
+    let mut response = Response::builder();
     if db_todo.deleted {
-        return_status = warp::http::StatusCode::CREATED;
+        response = response.status(StatusCode::CREATED)
+    } else {
+        response = response.status(StatusCode::OK)
     }
     db_todo.update_from(&todo);
 
-    Ok(warp::reply::with_status(
-        warp::reply::json(&db_todo),
-        return_status,
-    ))
+    Ok(response.body(Json(db_todo.clone())).unwrap())
 }
 
-pub async fn todos_delete(id: usize, db: TodoDb) -> Result<impl warp::Reply, Infallible> {
-    let mut todos = db.lock().await;
+pub async fn todos_delete(
+    State(state): State<MyServerContext>,
+    Path(id): Path<usize>,
+) -> Result<StatusCode, StatusCode> {
+    let mut todos = state.todo_db.lock().await;
     let Some(db_todo) = todos.get_mut(id) else {
-        return Ok(warp::http::StatusCode::NOT_FOUND);
+        return Err(StatusCode::NOT_FOUND);
     };
     db_todo.mark_deleted();
 
-    Ok(warp::http::StatusCode::NO_CONTENT)
+    Ok(StatusCode::NO_CONTENT)
 }

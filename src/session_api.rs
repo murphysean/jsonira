@@ -2,14 +2,22 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use axum::extract::Host;
+use axum::extract::State;
+use axum::http::HeaderMap;
+use axum::http::StatusCode;
+use axum::response::Response;
+use axum::Form;
+use axum::Json;
+use axum_extra::extract::cookie::Cookie;
+use axum_extra::extract::CookieJar;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
-use warp::http::StatusCode;
-use warp::reply;
 
 use crate::user_api::User;
 use crate::user_api::UserDb;
+use crate::MyServerContext;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {
@@ -23,58 +31,48 @@ impl SimpleErr {
 }
 
 pub async fn get_current_session(
-    users_database: Arc<UserDb>,
-    token: Option<String>,
-    host: String,
-) -> Result<impl warp::Reply, Infallible> {
-    let Some(token) = token else {
-        return Ok(reply::with_status(
-            reply::json(&SimpleErr::new(String::from("No Session, Please Login"))),
-            StatusCode::NOT_FOUND,
-        ));
+    State(state): State<MyServerContext>,
+    jar: CookieJar,
+    Host(host): Host,
+) -> Result<Json<User>, StatusCode> {
+    let Some(cookie) = jar.get("session") else {
+        return Err(StatusCode::NOT_FOUND);
     };
-    let user = match User::new_from_token(token, host) {
+    let user = match User::new_from_token(cookie.value().to_string(), host) {
         Err(e) => {
             tracing::error!(e);
-            return Ok(reply::with_status(
-                reply::json(&SimpleErr::new(String::from(
-                    "Invalid Session, Please Login",
-                ))),
-                StatusCode::UNAUTHORIZED,
-            ));
+            return Err(StatusCode::UNAUTHORIZED);
         }
         Ok(user) => user,
     };
-    if users_database.read_user(user.id).await.is_err() {
-        return Ok(reply::with_status(
-            reply::json(&SimpleErr::new(String::from("Invalid User, Please Login"))),
-            StatusCode::NOT_FOUND,
-        ));
+    if state.user_db.read_user(user.id).await.is_err() {
+        return Err(StatusCode::NOT_FOUND);
     }
-    Ok(reply::with_status(reply::json(&user), StatusCode::OK))
+    Ok(Json(user))
 }
 
 pub async fn handle_post_login(
-    form: HashMap<String, String>,
-    users_database: Arc<UserDb>,
-) -> Result<impl warp::Reply, Infallible> {
-    let mut response = warp::http::Response::builder()
-        .status(warp::http::StatusCode::SEE_OTHER)
-        .header("Location", "/index.html");
-    if let Ok(user) = users_database
+    State(state): State<MyServerContext>,
+    Form(form): Form<HashMap<String, String>>,
+) -> Result<(HeaderMap, StatusCode), StatusCode> {
+    let mut headers = HeaderMap::new();
+    headers.insert("Location", "/index.html".parse().unwrap());
+    if let Ok(user) = state
+        .user_db
         .authenticate_user(form.get("username"), form.get("password"))
         .await
     {
         let token = user.create_token();
-        response = response.header(
+        headers.insert(
             "Set-Cookie",
             format!(
                 "session={}; path=/; HttpOnly; SameSite=Strict; Secure",
                 token
-            ),
+            )
+            .parse()
+            .unwrap(),
         );
     };
-    let response = response.body("").unwrap();
 
-    Ok(response)
+    Ok((headers, StatusCode::SEE_OTHER))
 }
