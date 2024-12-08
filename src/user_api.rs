@@ -5,8 +5,6 @@ use chrono::{Duration, Utc};
 use jsonwebtokens::{encode, Algorithm, Verifier};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{json, to_string, Value};
-use std::convert::Infallible;
-use std::fmt;
 use std::io::Error as IoError;
 use std::sync::Arc;
 use std::{error::Error, io::ErrorKind};

@@ -1,22 +1,15 @@
-use std::collections::HashMap;
-use std::convert::Infallible;
-use std::sync::Arc;
-
 use axum::extract::Host;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
-use axum::response::Response;
 use axum::Form;
 use axum::Json;
-use axum_extra::extract::cookie::Cookie;
 use axum_extra::extract::CookieJar;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::debug;
+use std::collections::HashMap;
 
 use crate::user_api::User;
-use crate::user_api::UserDb;
 use crate::MyServerContext;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

@@ -2,23 +2,19 @@ use axum::extract::Host;
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::{StatusCode, Uri};
 use axum::response::Redirect;
-use axum::routing::method_routing::{delete, get, options, patch, post, put};
+use axum::routing::method_routing::{delete, get, post, put};
 use axum::{BoxError, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use session_api::{get_current_session, handle_post_login};
+use std::env;
 use std::future::Future;
-use std::net::{Shutdown, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{collections::HashMap, env};
 use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update, Todo};
 use tokio::signal;
 use tokio::sync::Mutex;
-use tower::ServiceExt;
-use tower_http::{
-    services::{ServeDir, ServeFile},
-    trace::TraceLayer,
-};
+use tower_http::services::ServeDir;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
 use user_api::{users_create, users_list, users_read, UserDb};

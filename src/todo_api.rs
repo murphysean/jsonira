@@ -2,13 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
-    http::{self, Response, StatusCode},
-    response::IntoResponse,
+    http::{Response, StatusCode},
     Json,
 };
 use chrono::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
-use serde_json::{json, to_string};
+use serde_json::to_string;
 use tokio::sync::Mutex;
 
 use crate::MyServerContext;
