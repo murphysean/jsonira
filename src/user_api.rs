@@ -4,7 +4,7 @@ use axum::Json;
 use chrono::{Duration, Utc};
 use jsonwebtokens::{encode, Algorithm, Verifier};
 use serde_derive::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, to_string, Value};
 use std::convert::Infallible;
 use std::fmt;
 use std::io::Error as IoError;
@@ -150,7 +150,25 @@ impl UserDb {
     /// Not all properties will be used
     /// Returns the resulting User
     pub async fn create_user(&self, user: User) -> Result<User, Box<dyn Error>> {
-        todo!()
+        let connection = self.connection.lock().await;
+        static QUERY: &str = "INSERT INTO users (email, salt, password, obj) VALUES (?,'salt','password',?) RETURNING id;";
+        let mut statement = connection.prepare(QUERY)?;
+        let bstr = to_string(&user)?;
+        statement.bind((1, user.email.as_str()))?;
+        statement.bind((2, bstr.as_str()))?;
+        let Ok(sqlite::State::Row) = statement.next() else {
+            return Err(Box::new(IoError::new(
+                ErrorKind::InvalidInput,
+                "Invalid Input",
+            )));
+        };
+        let user = User {
+            id: statement.read("id")?,
+            email: user.email,
+            name: user.name,
+            groups: user.groups,
+        };
+        Ok(user)
     }
 
     pub async fn authenticate_user(
@@ -211,6 +229,16 @@ pub async fn users_list(
         return Err(StatusCode::NOT_FOUND);
     };
     Ok(Json(users))
+}
+
+pub async fn users_create(
+    State(state): State<MyServerContext>,
+    Json(user): Json<User>,
+) -> Result<Json<User>, StatusCode> {
+    let Ok(user) = state.user_db.create_user(user).await else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    Ok(Json(user))
 }
 
 pub async fn users_read(

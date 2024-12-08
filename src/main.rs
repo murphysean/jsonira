@@ -3,14 +3,16 @@ use axum::handler::HandlerWithoutStateExt;
 use axum::http::{StatusCode, Uri};
 use axum::response::Redirect;
 use axum::routing::method_routing::{delete, get, options, patch, post, put};
-use axum::routing::IntoMakeService;
 use axum::{BoxError, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use session_api::{get_current_session, handle_post_login};
-use std::net::SocketAddr;
+use std::future::Future;
+use std::net::{Shutdown, SocketAddr};
 use std::sync::Arc;
+use std::time::Duration;
 use std::{collections::HashMap, env};
 use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update, Todo};
+use tokio::signal;
 use tokio::sync::Mutex;
 use tower::ServiceExt;
 use tower_http::{
@@ -19,7 +21,7 @@ use tower_http::{
 };
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
-use user_api::{users_list, UserDb};
+use user_api::{users_create, users_list, users_read, UserDb};
 
 mod session_api;
 mod todo_api;
@@ -57,14 +59,21 @@ async fn main() {
 
     let context = MyServerContext::new(secret_key);
 
-    tokio::spawn(redirect_http_to_https());
+    // Create a handle for our tls server so the shutdown signal can all shutdown
+    let handle = axum_server::Handle::new();
+    // save the future for easy shutting down of our redirect server
+    let shutdown_future = shutdown_signal(handle.clone());
+
+    tokio::spawn(redirect_http_to_https(shutdown_future));
 
     let app = Router::new()
         .route("/users", get(users_list))
+        .route("/users", post(users_create))
+        .route("/users/{id}", get(users_read))
         .route("/api/todos", get(todos_list))
-        //.route("/api/todos", post(todos_create))
+        .route("/api/todos", post(todos_create))
         .route("/api/todos/{id}", get(todos_read))
-        //.route("/api/todos/{id}", put(todos_update))
+        .route("/api/todos/{id}", put(todos_update))
         .route("/api/todos/{id}", delete(todos_delete))
         .route("/login", post(handle_post_login))
         .route("/session", get(get_current_session))
@@ -78,12 +87,44 @@ async fn main() {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8443));
     axum_server::bind_rustls(addr, config)
+        .handle(handle)
         .serve(app.into_make_service())
         .await
         .unwrap();
 }
 
-async fn redirect_http_to_https() {
+async fn shutdown_signal(handle: axum_server::Handle) {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("Received termination signal shutting down");
+    handle.graceful_shutdown(Some(Duration::from_secs(10))); // 10 secs is how long docker will wait
+                                                             // to force shutdown
+}
+
+async fn redirect_http_to_https<F>(signal: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
     fn make_https(host: String, uri: Uri) -> Result<Uri, BoxError> {
         let mut parts = uri.into_parts();
 
@@ -113,6 +154,7 @@ async fn redirect_http_to_https() {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, redirect.into_make_service())
+        .with_graceful_shutdown(signal)
         .await
         .unwrap();
 }

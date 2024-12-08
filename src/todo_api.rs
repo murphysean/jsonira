@@ -2,11 +2,13 @@ use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
-    http::{Response, StatusCode},
+    http::{self, Response, StatusCode},
+    response::IntoResponse,
     Json,
 };
 use chrono::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
+use serde_json::{json, to_string};
 use tokio::sync::Mutex;
 
 use crate::MyServerContext;
@@ -88,20 +90,24 @@ pub async fn todos_list(
     Ok(Json(todos))
 }
 
+#[axum::debug_handler]
 pub async fn todos_create(
     State(state): State<MyServerContext>,
     Json(todo): Json<Todo>,
-) -> Result<Response<Json<Todo>>, StatusCode> {
+) -> Result<Response<String>, StatusCode> {
     let mut todos = state.todo_db.lock().await;
     let id = todos.len();
-    let todo = Todo::new_from(id, &todo);
+    let new_todo = Todo::new_from(id, &todo);
+    let body = to_string(&new_todo).unwrap();
 
-    todos.push(todo.clone());
+    todos.push(new_todo);
+
     let response = Response::builder()
         .status(StatusCode::CREATED)
         .header("Location", format!("todos/{}", id))
-        .body(Json(todo))
+        .body(body)
         .unwrap();
+
     Ok(response)
 }
 
@@ -123,7 +129,7 @@ pub async fn todos_update(
     State(state): State<MyServerContext>,
     Path(id): Path<usize>,
     Json(todo): Json<Todo>,
-) -> Result<Response<Json<Todo>>, StatusCode> {
+) -> Result<Response<String>, StatusCode> {
     let mut todos = state.todo_db.lock().await;
     let Some(db_todo) = todos.get_mut(id) else {
         return Err(StatusCode::NOT_FOUND);
@@ -134,9 +140,10 @@ pub async fn todos_update(
     } else {
         response = response.status(StatusCode::OK)
     }
+    let body = to_string(&db_todo).unwrap();
     db_todo.update_from(&todo);
 
-    Ok(response.body(Json(db_todo.clone())).unwrap())
+    Ok(response.body(body).unwrap())
 }
 
 pub async fn todos_delete(
