@@ -5,6 +5,7 @@ use axum::response::Redirect;
 use axum::routing::method_routing::{delete, get, post, put};
 use axum::{BoxError, Router};
 use axum_server::tls_rustls::RustlsConfig;
+use chat_api::server_sent_events;
 use session_api::{get_current_session, handle_post_login};
 use std::env;
 use std::future::Future;
@@ -19,9 +20,9 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
 use user_api::{users_create, users_list, users_read, UserDb};
 
-mod session_api;
-mod todo_api;
-mod user_api;
+mod api;
+mod db;
+mod model;
 
 /// A context that will be available at each handler
 #[derive(Clone)]
@@ -71,6 +72,11 @@ async fn main() {
         .route("/api/todos/{id}", get(todos_read))
         .route("/api/todos/{id}", put(todos_update))
         .route("/api/todos/{id}", delete(todos_delete))
+        .route("/api/chat/rooms", post(chats_post_room))
+        .route("/api/chat/rooms/{id}", get(chats_get_room))
+        .route("/api/chat/rooms/{id}/messages", get(chats_get_room_messages))
+        .route("/api/chat/rooms/{id}/messages", post(chats_post_room_message))
+        .route("/api/events", get(server_sent_events))
         .route("/login", post(handle_post_login))
         .route("/session", get(get_current_session))
         .nest_service("/", ServeDir::new("web"))

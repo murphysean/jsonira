@@ -1,21 +1,38 @@
+use axum::response::sse::{Event, KeepAlive, Sse};
+use axum_extra::{headers, TypedHeader};
+use futures::stream::{self, Stream};
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
-};
+use std::{convert::Infallible, path::PathBuf, time::Duration};
 use tokio::sync::{mpsc, RwLock};
-use tokio_stream::wrappers::UnboundedReceiverStream;
-use warp::filters::ws::{Message, WebSocket};
+use tokio_stream::StreamExt as _;
+use tower_http::{services::ServeDir, trace::TraceLayer};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
+//static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 
 /// Our state of currently connected users.
 ///
 /// - Key is their id
 /// - Value is a sender of `warp::ws::Message`
-pub type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>>;
+//pub type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<>>>>;
 
+pub async fn server_sent_events(
+    TypedHeader(user_agent): TypedHeader<headers::UserAgent>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    println!("{} connected", user_agent.as_str());
+
+    let stream =
+        tokio_stream::StreamExt::map(stream::repeat_with(|| Event::default().data("hi!")), Ok)
+            .throttle(Duration::from_secs(1));
+
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(1))
+            .text("keep-alive-text"),
+    )
+}
+/*
 pub async fn user_connected(ws: WebSocket, users: Users) {
     // Use a counter to assign a new unique ID for this user.
     let my_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
@@ -93,3 +110,4 @@ async fn user_disconnected(my_id: usize, users: &Users) {
     // Stream closed up, so remove from the user list
     users.write().await.remove(&my_id);
 }
+*/
