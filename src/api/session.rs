@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::user_api::User;
+use crate::api::user::User;
 use crate::MyServerContext;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

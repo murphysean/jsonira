@@ -5,20 +5,21 @@ use axum::response::Redirect;
 use axum::routing::method_routing::{delete, get, post, put};
 use axum::{BoxError, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use chat_api::server_sent_events;
-use session_api::{get_current_session, handle_post_login};
+use api::chat::{chats_post_room, chats_post_room_message, chats_get_room, chats_get_room_messages};
+use api::event::server_sent_events;
+use api::session::{get_current_session, handle_post_login};
 use std::env;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use todo_api::{todos_create, todos_delete, todos_list, todos_read, todos_update, Todo};
+use api::todo::{blank_db, todos_create, todos_delete, todos_list, todos_read, todos_update, Todo};
 use tokio::signal;
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
-use user_api::{users_create, users_list, users_read, UserDb};
+use api::user::{users_create, users_list, users_read, UserDb};
 
 mod api;
 mod db;
@@ -37,7 +38,7 @@ impl MyServerContext {
         Self {
             token_secret: secret_key,
             user_db: Arc::new(UserDb::new().unwrap()),
-            todo_db: todo_api::blank_db(),
+            todo_db: blank_db(),
         }
     }
 }

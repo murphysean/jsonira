@@ -36,3 +36,5 @@ chrono = { version = "0.4.38", features = ["serde"] }
 jsonwebtokens = "1.2.0"
 sqlite = "0.36.1"
 uuid = { version = "1.11.0", features = ["serde", "v4"] }
+thiserror = "2.0.6"
+anyhow = "1.0.94"
