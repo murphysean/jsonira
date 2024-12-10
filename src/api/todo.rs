@@ -1,16 +1,19 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use axum::{
     extract::{Path, Query, State},
     http::{Response, StatusCode},
     Json,
 };
-use chrono::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use tokio::sync::Mutex;
 
-use crate::MyServerContext;
+use super::ApiContext;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {
@@ -27,8 +30,8 @@ impl SimpleErr {
 pub struct Todo {
     pub id: usize,
     pub created_by: String,
-    pub create_date: DateTime<Utc>,
-    pub update_date: DateTime<Utc>,
+    pub create_date: u64,
+    pub update_date: u64,
     pub complete: bool,
     pub text: String,
     pub deleted: bool,
@@ -39,8 +42,14 @@ impl Todo {
         Self {
             id,
             created_by: other.created_by.to_owned(),
-            create_date: Utc::now(),
-            update_date: Utc::now(),
+            create_date: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            update_date: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             complete: false,
             text: other.text.to_owned(),
             deleted: false,
@@ -49,16 +58,25 @@ impl Todo {
 
     pub fn mark_deleted(&mut self) {
         self.created_by = String::from("deleted");
-        self.update_date = Utc::now();
+        self.update_date = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         self.deleted = true;
     }
 
     pub fn update_from(&mut self, other: &Self) {
         if self.deleted {
-            self.create_date = Utc::now();
+            self.create_date = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
             self.created_by = other.created_by.to_owned();
         }
-        self.update_date = Utc::now();
+        self.update_date = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         self.complete = other.complete;
         self.text = other.text.to_owned();
         self.deleted = false;
@@ -72,7 +90,7 @@ pub fn blank_db() -> TodoDb {
 }
 
 pub async fn todos_list(
-    State(state): State<MyServerContext>,
+    State(state): State<ApiContext>,
     Query(query): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<Todo>>, StatusCode> {
     let offset: Option<usize> = query.get("offset").and_then(|offset| offset.parse().ok());
@@ -91,7 +109,7 @@ pub async fn todos_list(
 
 #[axum::debug_handler]
 pub async fn todos_create(
-    State(state): State<MyServerContext>,
+    State(state): State<ApiContext>,
     Json(todo): Json<Todo>,
 ) -> Result<Response<String>, StatusCode> {
     let mut todos = state.todo_db.lock().await;
@@ -111,7 +129,7 @@ pub async fn todos_create(
 }
 
 pub async fn todos_read(
-    State(state): State<MyServerContext>,
+    State(state): State<ApiContext>,
     Path(id): Path<usize>,
 ) -> Result<Json<Todo>, StatusCode> {
     let todos = state.todo_db.lock().await;
@@ -125,7 +143,7 @@ pub async fn todos_read(
 }
 
 pub async fn todos_update(
-    State(state): State<MyServerContext>,
+    State(state): State<ApiContext>,
     Path(id): Path<usize>,
     Json(todo): Json<Todo>,
 ) -> Result<Response<String>, StatusCode> {
@@ -146,7 +164,7 @@ pub async fn todos_update(
 }
 
 pub async fn todos_delete(
-    State(state): State<MyServerContext>,
+    State(state): State<ApiContext>,
     Path(id): Path<usize>,
 ) -> Result<StatusCode, StatusCode> {
     let mut todos = state.todo_db.lock().await;

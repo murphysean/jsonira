@@ -5,12 +5,14 @@ use axum::http::StatusCode;
 use axum::Form;
 use axum::Json;
 use axum_extra::extract::CookieJar;
+use axum::debug_handler;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::api::user::User;
-use crate::MyServerContext;
+use crate::model::user::User;
+
+use super::ApiContext;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {
@@ -24,7 +26,7 @@ impl SimpleErr {
 }
 
 pub async fn get_current_session(
-    State(state): State<MyServerContext>,
+    State(state): State<ApiContext>,
     jar: CookieJar,
     Host(host): Host,
 ) -> Result<Json<User>, StatusCode> {
@@ -33,7 +35,7 @@ pub async fn get_current_session(
     };
     let user = match User::new_from_token(cookie.value().to_string(), host) {
         Err(e) => {
-            tracing::error!(e);
+            tracing::error!("{}", e);
             return Err(StatusCode::UNAUTHORIZED);
         }
         Ok(user) => user,
@@ -44,18 +46,21 @@ pub async fn get_current_session(
     Ok(Json(user))
 }
 
+#[axum::debug_handler]
 pub async fn handle_post_login(
-    State(state): State<MyServerContext>,
+    State(state): State<ApiContext>,
     Form(form): Form<HashMap<String, String>>,
 ) -> Result<(HeaderMap, StatusCode), StatusCode> {
+    let email = form.get("username").ok_or(StatusCode::BAD_REQUEST)?;
+    let password = form.get("password").ok_or(StatusCode::BAD_REQUEST)?;
     let mut headers = HeaderMap::new();
     headers.insert("Location", "/index.html".parse().unwrap());
     if let Ok(user) = state
         .user_db
-        .authenticate_user(form.get("username"), form.get("password"))
+        .authenticate_user(email, password)
         .await
     {
-        let token = user.create_token();
+        let token = user.create_token(&state.token_secret).unwrap();
         headers.insert(
             "Set-Cookie",
             format!(

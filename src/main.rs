@@ -1,61 +1,57 @@
+use api::chat::{
+    chats_get_room, chats_get_room_messages, chats_get_rooms, chats_post_room,
+    chats_post_room_message,
+};
+use api::event::server_sent_events;
+use api::session::{get_current_session, handle_post_login};
+use api::todo::{todos_create, todos_delete, todos_list, todos_read, todos_update};
+use api::user::{user_delete, user_get, user_patch, user_put, users_get, users_post};
+use api::ApiContext;
 use axum::extract::Host;
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::{StatusCode, Uri};
 use axum::response::Redirect;
 use axum::routing::method_routing::{delete, get, post, put};
-use axum::{BoxError, Router};
+use axum::routing::patch;
+use axum::{BoxError, Router, ServiceExt};
 use axum_server::tls_rustls::RustlsConfig;
-use api::chat::{chats_post_room, chats_post_room_message, chats_get_room, chats_get_room_messages};
-use api::event::server_sent_events;
-use api::session::{get_current_session, handle_post_login};
+use tower_http::trace::TraceLayer;
 use std::env;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
-use api::todo::{blank_db, todos_create, todos_delete, todos_list, todos_read, todos_update, Todo};
 use tokio::signal;
-use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
-use api::user::{users_create, users_list, users_read, UserDb};
 
 mod api;
 mod db;
 mod model;
 
-/// A context that will be available at each handler
-#[derive(Clone)]
-struct MyServerContext {
-    token_secret: String,
-    user_db: Arc<UserDb>,
-    todo_db: Arc<Mutex<Vec<Todo>>>,
-}
-
-impl MyServerContext {
-    pub fn new(secret_key: String) -> Self {
-        Self {
-            token_secret: secret_key,
-            user_db: Arc::new(UserDb::new().unwrap()),
-            todo_db: blank_db(),
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() {
     let secret_key = env::var("SECRET_KEY").unwrap_or(String::from("secret"));
     let console_layer = console_subscriber::spawn();
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        // axum logs rejections from built-in extractors with the `axum::rejection`
+        // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
+        format!(
+            "{}=debug,tower_http=debug,axum::rejection=trace",
+            env!("CARGO_CRATE_NAME")
+        )
+        .into()
+    });
     let fmt_layer = tracing_subscriber::fmt::layer()
         .pretty()
-        .with_filter(LevelFilter::INFO);
+        .with_filter(env_filter);
+        //.with_filter(LevelFilter::TRACE);
     tracing_subscriber::registry()
         .with(console_layer)
         .with(fmt_layer)
         .init();
 
-    let context = MyServerContext::new(secret_key);
+    let context = ApiContext::new(secret_key);
 
     // Create a handle for our tls server so the shutdown signal can all shutdown
     let handle = axum_server::Handle::new();
@@ -65,22 +61,33 @@ async fn main() {
     tokio::spawn(redirect_http_to_https(shutdown_future));
 
     let app = Router::new()
-        .route("/users", get(users_list))
-        .route("/users", post(users_create))
-        .route("/users/{id}", get(users_read))
+        .route("/api/users", get(users_get))
+        .route("/api/users", post(users_post))
+        .route("/api/users/:id", get(user_get))
+        .route("/api/users/:id", put(user_put))
+        .route("/api/users/:id", patch(user_patch))
+        .route("/api/users/:id", delete(user_delete))
         .route("/api/todos", get(todos_list))
         .route("/api/todos", post(todos_create))
-        .route("/api/todos/{id}", get(todos_read))
-        .route("/api/todos/{id}", put(todos_update))
-        .route("/api/todos/{id}", delete(todos_delete))
+        .route("/api/todos/:id", get(todos_read))
+        .route("/api/todos/:id", put(todos_update))
+        .route("/api/todos/:id", delete(todos_delete))
+        .route("/api/chat/rooms", get(chats_get_rooms))
         .route("/api/chat/rooms", post(chats_post_room))
-        .route("/api/chat/rooms/{id}", get(chats_get_room))
-        .route("/api/chat/rooms/{id}/messages", get(chats_get_room_messages))
-        .route("/api/chat/rooms/{id}/messages", post(chats_post_room_message))
+        .route("/api/chat/rooms/:id", get(chats_get_room))
+        .route(
+            "/api/chat/rooms/:id/messages",
+            get(chats_get_room_messages),
+        )
+        .route(
+            "/api/chat/rooms/:id/messages",
+            post(chats_post_room_message),
+        )
         .route("/api/events", get(server_sent_events))
         .route("/login", post(handle_post_login))
         .route("/session", get(get_current_session))
-        .nest_service("/", ServeDir::new("web"))
+        .fallback_service(ServeDir::new("web"))
+        .layer(TraceLayer::new_for_http())
         .with_state(context);
 
     // configure certificate and private key used by https
