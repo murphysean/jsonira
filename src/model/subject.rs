@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::api::{abac::{self, Decision}, AppState};
+use crate::api::abac::{self, Decision};
+use crate::AppState;
 
 use super::user::User;
 
@@ -125,11 +126,13 @@ pub struct AuthContext {
     pub action: Action,
 }
 
-impl AuthContext{
+impl AuthContext {
     /// Runs a policy and wraps its decision in a result
     /// Since it can close over anything missing from the auth context it only references itself
     pub fn enforce_policy<P>(&self, policy: P) -> Result<(), eyre::Error>
-    where P: FnOnce(&Self) -> abac::Decision {
+    where
+        P: FnOnce(&Self) -> abac::Decision,
+    {
         match policy(&self) {
             Decision::Permit => Ok(()),
             _ => Err(eyre!("Policy Forbids")),
@@ -209,7 +212,8 @@ impl IntoResponse for SubjectRejection {
 #[async_trait]
 impl<S> FromRequestParts<S> for AuthContext
 where
-    S: Send + Sync, AppState: FromRef<S>
+    S: Send + Sync,
+    AppState: FromRef<S>,
 {
     type Rejection = SubjectRejection;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
@@ -218,12 +222,14 @@ where
             return Err(SubjectRejection::FailedToResolveHost);
         };
         let Ok(OriginalUri(uri)) = OriginalUri::from_request_parts(parts, state).await;
-        let State(inner_state) :State<AppState>  = State::from_request_parts(parts, state).await.unwrap();
+        let State(inner_state): State<AppState> =
+            State::from_request_parts(parts, state).await.unwrap();
         //Pull session cookie
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
         if let Some(cookie) = jar.get("session") {
             let token = cookie.value().to_string();
-            let alg = Algorithm::new_hmac(jsonwebtokens::AlgorithmID::HS256, inner_state.token_secret)?;
+            let alg =
+                Algorithm::new_hmac(jsonwebtokens::AlgorithmID::HS256, inner_state.token_secret)?;
             let verifier = Verifier::create()
                 .issuer("https://www.mrfy.io")
                 .audience(format!("https://{}", host))
@@ -280,30 +286,27 @@ mod tests {
 
     #[test]
     fn test_subject_equals() {
-        assert_eq!(
-            Subject::UserId(20), 
-            Subject::UserId(20)
-        );
+        assert_eq!(Subject::UserId(20), Subject::UserId(20));
         // Tokens (JWT) have a sub typed as a str
-        let token: Value = from_str(r#"{
+        let token: Value = from_str(
+            r#"{
             "sub": "20",
             "email": "murphysean84@gmail.com"
-        }"#).unwrap();
+        }"#,
+        )
+        .unwrap();
         let token_user: User = token.try_into().unwrap();
-        let simple_user: User = from_str(r#"{
+        let simple_user: User = from_str(
+            r#"{
             "id": 20,
             "email": "murphysean84@gmail.com"
-        }"#).unwrap();
+        }"#,
+        )
+        .unwrap();
+        assert_eq!(Subject::UserId(20), Subject::User(token_user.clone()),);
+        assert_eq!(Subject::UserId(20), Subject::User(simple_user.clone()),);
         assert_eq!(
-            Subject::UserId(20), 
-            Subject::User(token_user.clone()),
-        );
-        assert_eq!(
-            Subject::UserId(20), 
-            Subject::User(simple_user.clone()),
-        );
-        assert_eq!(
-            Subject::UserEmail(String::from("murphysean84@gmail.com")), 
+            Subject::UserEmail(String::from("murphysean84@gmail.com")),
             Subject::User(simple_user),
         );
     }

@@ -10,7 +10,7 @@ use crate::model::subject::{AuthContext, Subject};
 use crate::model::user::{NewUser, User};
 
 use super::abac::Decision;
-use super::AppState;
+use crate::AppState;
 
 #[tracing::instrument(level = "info")]
 pub async fn users_get(State(state): State<AppState>) -> Result<Json<Vec<User>>, StatusCode> {
@@ -58,10 +58,14 @@ pub async fn user_put(
     Path(id): Path<i64>,
     Json(mut user): Json<User>,
 ) -> Result<Json<User>, StatusCode> {
-    auth_ctx.enforce_policy(|actx|{
-        if actx.subject == Subject::UserId(1){return Decision::Permit; }
-        Decision::Deny
-    }).map_err(|_|StatusCode::FORBIDDEN)?;
+    auth_ctx
+        .enforce_policy(|actx| {
+            if actx.subject == Subject::UserId(1) {
+                return Decision::Permit;
+            }
+            Decision::Deny
+        })
+        .map_err(|_| StatusCode::FORBIDDEN)?;
     user.id = Some(id);
     let result = state.user_db.update_user(id, user).await;
     match result.inspect_err(|e| debug!("Error: {}", e)) {
@@ -79,10 +83,14 @@ pub async fn user_patch(
     Path(id): Path<i64>,
     body: String,
 ) -> Result<Json<User>, StatusCode> {
-    auth_ctx.enforce_policy(|actx|{
-        if actx.subject == Subject::UserId(1){return Decision::Permit; }
-        Decision::Deny
-    }).map_err(|_|StatusCode::FORBIDDEN)?;
+    auth_ctx
+        .enforce_policy(|actx| {
+            if actx.subject == Subject::UserId(1) {
+                return Decision::Permit;
+            }
+            Decision::Deny
+        })
+        .map_err(|_| StatusCode::FORBIDDEN)?;
     let Ok(user) = state.user_db.read_user(id).await else {
         return Err(StatusCode::NOT_FOUND);
     };
@@ -126,10 +134,14 @@ pub async fn user_delete(
     auth_ctx: AuthContext,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, StatusCode> {
-    auth_ctx.enforce_policy(|actx|{
-        if actx.subject == Subject::UserId(1){return Decision::Permit; }
-        Decision::Deny
-    }).map_err(|_|StatusCode::FORBIDDEN)?;
+    auth_ctx
+        .enforce_policy(|actx| {
+            if actx.subject == Subject::UserId(1) {
+                return Decision::Permit;
+            }
+            Decision::Deny
+        })
+        .map_err(|_| StatusCode::FORBIDDEN)?;
     let Ok(_) = state.user_db.delete_user(id).await else {
         return Err(StatusCode::NOT_FOUND);
     };

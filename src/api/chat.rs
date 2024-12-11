@@ -1,11 +1,11 @@
 use axum::{extract::State, http::StatusCode, Json};
 
-use super::AppState;
-use crate::model::chat::{Message, Room};
+use crate::{
+    model::chat::{Message, Room},
+    AppState,
+};
 
-pub async fn chats_get_rooms(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<Room>>, StatusCode> {
+pub async fn chats_get_rooms(State(state): State<AppState>) -> Result<Json<Vec<Room>>, StatusCode> {
     let Ok(rooms) = state.chat_db.select_rooms().await else {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };

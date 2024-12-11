@@ -13,7 +13,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use tokio::sync::Mutex;
 
-use super::AppState;
+use crate::AppState;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {

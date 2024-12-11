@@ -1,7 +1,9 @@
-use axum::{extract::{Path, State}, http::{HeaderMap, StatusCode}};
+use axum::{
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
+};
 
-use crate::{api::AppState, model::subject::AuthContext};
-
+use crate::{model::subject::AuthContext, AppState};
 
 #[tracing::instrument(level = "info")]
 pub async fn user_patch(

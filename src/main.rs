@@ -5,9 +5,9 @@ use api::chat::{
 use api::event::server_sent_events;
 use api::session::{get_current_session, handle_post_login};
 use api::task::tasks_post;
+use api::todo::{blank_db, Todo};
 use api::todo::{todos_create, todos_delete, todos_list, todos_read, todos_update};
 use api::user::{user_delete, user_get, user_patch, user_put, users_get, users_post};
-use api::AppState;
 use axum::extract::Host;
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::{StatusCode, Uri};
@@ -16,11 +16,14 @@ use axum::routing::method_routing::{delete, get, post, put};
 use axum::routing::patch;
 use axum::{BoxError, Router, ServiceExt};
 use axum_server::tls_rustls::RustlsConfig;
+use db::{chat::ChatDb, user::UserDb};
 use std::env;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::time::Duration;
+use std::{fmt::Debug, sync::Arc};
 use tokio::signal;
+use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::level_filters::LevelFilter;
@@ -30,6 +33,32 @@ mod api;
 mod db;
 mod model;
 mod web;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub token_secret: String,
+    pub user_db: Arc<UserDb>,
+    pub chat_db: Arc<ChatDb>,
+    pub todo_db: Arc<Mutex<Vec<Todo>>>,
+    //task_db: Arc<TaskDb>,
+}
+
+impl Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiContext").finish()
+    }
+}
+
+impl AppState {
+    pub fn new(secret_key: String) -> Self {
+        Self {
+            token_secret: secret_key,
+            user_db: Arc::new(UserDb::new().unwrap()),
+            chat_db: Arc::new(ChatDb::new().unwrap()),
+            todo_db: blank_db(),
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() {

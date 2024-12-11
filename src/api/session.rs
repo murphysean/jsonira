@@ -14,7 +14,7 @@ use crate::model::subject::AuthContext;
 use crate::model::subject::Subject;
 use crate::model::user::User;
 
-use super::AppState;
+use crate::AppState;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {
