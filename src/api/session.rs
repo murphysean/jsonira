@@ -31,19 +31,15 @@ pub async fn get_current_session(
     State(state): State<ApiState>,
     auth_ctx: AuthContext,
 ) -> Result<(HeaderMap, Json<User>), StatusCode> {
-    println!("HERE 1");
     let Subject::User(user) = auth_ctx.subject else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    println!("HERE 2 {:?}", &user);
     let Some(id) = user.id else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    println!("HERE 3");
     let mut headers = HeaderMap::new();
     if let Ok(user) = state.user_db.read_user(id).await {
         let token = user.create_token(&state.token_secret).unwrap();
-        println!("HERE 4");
         headers.insert(
             "Set-Cookie",
             format!(

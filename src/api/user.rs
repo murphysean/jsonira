@@ -1,14 +1,15 @@
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::Json;
-use headers::HeaderMapExt;
 use json_patch::Patch;
 use serde_json::{from_str, json, Value};
 use tracing::{debug, error};
 
 use crate::db::user::UserDbError;
+use crate::model::subject::{AuthContext, Subject};
 use crate::model::user::{NewUser, User};
 
+use super::abac::Decision;
 use super::ApiState;
 
 #[tracing::instrument(level = "info")]
@@ -53,9 +54,14 @@ pub async fn user_get(
 #[tracing::instrument(level = "info")]
 pub async fn user_put(
     State(state): State<ApiState>,
+    auth_ctx: AuthContext,
     Path(id): Path<i64>,
     Json(mut user): Json<User>,
 ) -> Result<Json<User>, StatusCode> {
+    auth_ctx.enforce_policy(|actx|{
+        if actx.subject == Subject::UserId(1){return Decision::Permit; }
+        Decision::Deny
+    }).map_err(|_|StatusCode::FORBIDDEN)?;
     user.id = Some(id);
     let result = state.user_db.update_user(id, user).await;
     match result.inspect_err(|e| debug!("Error: {}", e)) {
@@ -68,10 +74,15 @@ pub async fn user_put(
 #[tracing::instrument(level = "info")]
 pub async fn user_patch(
     State(state): State<ApiState>,
+    auth_ctx: AuthContext,
     headers: HeaderMap,
     Path(id): Path<i64>,
     body: String,
 ) -> Result<Json<User>, StatusCode> {
+    auth_ctx.enforce_policy(|actx|{
+        if actx.subject == Subject::UserId(1){return Decision::Permit; }
+        Decision::Deny
+    }).map_err(|_|StatusCode::FORBIDDEN)?;
     let Ok(user) = state.user_db.read_user(id).await else {
         return Err(StatusCode::NOT_FOUND);
     };
@@ -112,8 +123,13 @@ pub async fn user_patch(
 #[tracing::instrument(level = "info")]
 pub async fn user_delete(
     State(state): State<ApiState>,
+    auth_ctx: AuthContext,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, StatusCode> {
+    auth_ctx.enforce_policy(|actx|{
+        if actx.subject == Subject::UserId(1){return Decision::Permit; }
+        Decision::Deny
+    }).map_err(|_|StatusCode::FORBIDDEN)?;
     let Ok(_) = state.user_db.delete_user(id).await else {
         return Err(StatusCode::NOT_FOUND);
     };

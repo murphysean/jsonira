@@ -2,17 +2,18 @@ use std::{default, result};
 
 use axum::{
     async_trait,
-    extract::{FromRequestParts, Host, OriginalUri, Path, State},
+    extract::{FromRef, FromRequestParts, Host, OriginalUri, Path, State},
     http::{request::Parts, Method, StatusCode, Uri},
     response::{IntoResponse, IntoResponseParts},
 };
 use axum_extra::extract::CookieJar;
+use eyre::eyre;
 use jsonwebtokens::{Algorithm, Verifier};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::api::ApiState;
+use crate::api::{abac::{self, Decision}, ApiState};
 
 use super::user::User;
 
@@ -124,6 +125,18 @@ pub struct AuthContext {
     pub action: Action,
 }
 
+impl AuthContext{
+    /// Runs a policy and wraps its decision in a result
+    /// Since it can close over anything missing from the auth context it only references itself
+    pub fn enforce_policy<P>(&self, policy: P) -> Result<(), eyre::Error>
+    where P: FnOnce(&Self) -> abac::Decision {
+        match policy(&self) {
+            Decision::Permit => Ok(()),
+            _ => Err(eyre!("Policy Forbids")),
+        }
+    }
+}
+
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
 pub struct Environment {
     pub issuer: String,
@@ -196,7 +209,7 @@ impl IntoResponse for SubjectRejection {
 #[async_trait]
 impl<S> FromRequestParts<S> for AuthContext
 where
-    S: Send + Sync,
+    S: Send + Sync, ApiState: FromRef<S>
 {
     type Rejection = SubjectRejection;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
@@ -205,13 +218,12 @@ where
             return Err(SubjectRejection::FailedToResolveHost);
         };
         let Ok(OriginalUri(uri)) = OriginalUri::from_request_parts(parts, state).await;
-        //TODO See if I can pull the api state off of the request
-        //let State(state) : State<ApiContext> = State::from_request_parts(parts, state).await.unwrap();
+        let State(inner_state) :State<ApiState>  = State::from_request_parts(parts, state).await.unwrap();
         //Pull session cookie
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
         if let Some(cookie) = jar.get("session") {
             let token = cookie.value().to_string();
-            let alg = Algorithm::new_hmac(jsonwebtokens::AlgorithmID::HS256, "secret")?;
+            let alg = Algorithm::new_hmac(jsonwebtokens::AlgorithmID::HS256, inner_state.token_secret)?;
             let verifier = Verifier::create()
                 .issuer("https://www.mrfy.io")
                 .audience(format!("https://{}", host))
