@@ -2,7 +2,7 @@ use std::{default, result};
 
 use axum::{
     async_trait,
-    extract::{FromRequestParts, Host, OriginalUri, Path},
+    extract::{FromRequestParts, Host, OriginalUri, Path, State},
     http::{request::Parts, Method, StatusCode, Uri},
     response::{IntoResponse, IntoResponseParts},
 };
@@ -11,6 +11,8 @@ use jsonwebtokens::{Algorithm, Verifier};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+
+use crate::api::ApiState;
 
 use super::user::User;
 
@@ -203,6 +205,8 @@ where
             return Err(SubjectRejection::FailedToResolveHost);
         };
         let Ok(OriginalUri(uri)) = OriginalUri::from_request_parts(parts, state).await;
+        //TODO See if I can pull the api state off of the request
+        //let State(state) : State<ApiContext> = State::from_request_parts(parts, state).await.unwrap();
         //Pull session cookie
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
         if let Some(cookie) = jar.get("session") {

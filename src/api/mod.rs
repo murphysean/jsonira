@@ -13,7 +13,7 @@ pub mod todo;
 pub mod user;
 
 #[derive(Clone)]
-pub struct ApiContext {
+pub struct ApiState {
     token_secret: String,
     user_db: Arc<UserDb>,
     chat_db: Arc<ChatDb>,
@@ -21,13 +21,13 @@ pub struct ApiContext {
     //task_db: Arc<TaskDb>,
 }
 
-impl Debug for ApiContext {
+impl Debug for ApiState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ApiContext").finish()
     }
 }
 
-impl ApiContext {
+impl ApiState {
     pub fn new(secret_key: String) -> Self {
         Self {
             token_secret: secret_key,

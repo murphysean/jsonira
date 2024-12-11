@@ -9,10 +9,10 @@ use tracing::{debug, error};
 use crate::db::user::UserDbError;
 use crate::model::user::{NewUser, User};
 
-use super::ApiContext;
+use super::ApiState;
 
 #[tracing::instrument(level = "info")]
-pub async fn users_get(State(state): State<ApiContext>) -> Result<Json<Vec<User>>, StatusCode> {
+pub async fn users_get(State(state): State<ApiState>) -> Result<Json<Vec<User>>, StatusCode> {
     let result = state.user_db.read_users().await;
     match result.inspect_err(|e| debug!("Error: {}", e)) {
         Ok(users) => Ok(Json(users)),
@@ -23,7 +23,7 @@ pub async fn users_get(State(state): State<ApiContext>) -> Result<Json<Vec<User>
 
 #[tracing::instrument(level = "info")]
 pub async fn users_post(
-    State(state): State<ApiContext>,
+    State(state): State<ApiState>,
     Json(user): Json<NewUser>,
 ) -> Result<Json<User>, StatusCode> {
     let result = state
@@ -38,7 +38,7 @@ pub async fn users_post(
 
 #[tracing::instrument(level = "info")]
 pub async fn user_get(
-    State(state): State<ApiContext>,
+    State(state): State<ApiState>,
     Path(id): Path<i64>,
 ) -> Result<Json<User>, StatusCode> {
     error!(id);
@@ -52,7 +52,7 @@ pub async fn user_get(
 
 #[tracing::instrument(level = "info")]
 pub async fn user_put(
-    State(state): State<ApiContext>,
+    State(state): State<ApiState>,
     Path(id): Path<i64>,
     Json(mut user): Json<User>,
 ) -> Result<Json<User>, StatusCode> {
@@ -67,7 +67,7 @@ pub async fn user_put(
 
 #[tracing::instrument(level = "info")]
 pub async fn user_patch(
-    State(state): State<ApiContext>,
+    State(state): State<ApiState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
     body: String,
@@ -111,7 +111,7 @@ pub async fn user_patch(
 
 #[tracing::instrument(level = "info")]
 pub async fn user_delete(
-    State(state): State<ApiContext>,
+    State(state): State<ApiState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, StatusCode> {
     let Ok(_) = state.user_db.delete_user(id).await else {

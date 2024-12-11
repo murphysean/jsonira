@@ -7,7 +7,7 @@ use api::session::{get_current_session, handle_post_login};
 use api::task::tasks_post;
 use api::todo::{todos_create, todos_delete, todos_list, todos_read, todos_update};
 use api::user::{user_delete, user_get, user_patch, user_put, users_get, users_post};
-use api::ApiContext;
+use api::ApiState;
 use axum::extract::Host;
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::{StatusCode, Uri};
@@ -52,7 +52,7 @@ async fn main() {
         .with(fmt_layer)
         .init();
 
-    let context = ApiContext::new(secret_key);
+    let context = ApiState::new(secret_key);
 
     // Create a handle for our tls server so the shutdown signal can all shutdown
     let handle = axum_server::Handle::new();
