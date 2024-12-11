@@ -10,10 +10,10 @@ use crate::model::subject::{AuthContext, Subject};
 use crate::model::user::{NewUser, User};
 
 use super::abac::Decision;
-use super::ApiState;
+use super::AppState;
 
 #[tracing::instrument(level = "info")]
-pub async fn users_get(State(state): State<ApiState>) -> Result<Json<Vec<User>>, StatusCode> {
+pub async fn users_get(State(state): State<AppState>) -> Result<Json<Vec<User>>, StatusCode> {
     let result = state.user_db.read_users().await;
     match result.inspect_err(|e| debug!("Error: {}", e)) {
         Ok(users) => Ok(Json(users)),
@@ -24,7 +24,7 @@ pub async fn users_get(State(state): State<ApiState>) -> Result<Json<Vec<User>>,
 
 #[tracing::instrument(level = "info")]
 pub async fn users_post(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Json(user): Json<NewUser>,
 ) -> Result<Json<User>, StatusCode> {
     let result = state
@@ -39,7 +39,7 @@ pub async fn users_post(
 
 #[tracing::instrument(level = "info")]
 pub async fn user_get(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<User>, StatusCode> {
     error!(id);
@@ -53,7 +53,7 @@ pub async fn user_get(
 
 #[tracing::instrument(level = "info")]
 pub async fn user_put(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     auth_ctx: AuthContext,
     Path(id): Path<i64>,
     Json(mut user): Json<User>,
@@ -73,7 +73,7 @@ pub async fn user_put(
 
 #[tracing::instrument(level = "info")]
 pub async fn user_patch(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     auth_ctx: AuthContext,
     headers: HeaderMap,
     Path(id): Path<i64>,
@@ -122,7 +122,7 @@ pub async fn user_patch(
 
 #[tracing::instrument(level = "info")]
 pub async fn user_delete(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     auth_ctx: AuthContext,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, StatusCode> {

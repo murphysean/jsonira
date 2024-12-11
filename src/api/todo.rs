@@ -13,7 +13,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use tokio::sync::Mutex;
 
-use super::ApiState;
+use super::AppState;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {
@@ -90,7 +90,7 @@ pub fn blank_db() -> TodoDb {
 }
 
 pub async fn todos_list(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Query(query): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<Todo>>, StatusCode> {
     let offset: Option<usize> = query.get("offset").and_then(|offset| offset.parse().ok());
@@ -109,7 +109,7 @@ pub async fn todos_list(
 
 #[axum::debug_handler]
 pub async fn todos_create(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Json(todo): Json<Todo>,
 ) -> Result<Response<String>, StatusCode> {
     let mut todos = state.todo_db.lock().await;
@@ -129,7 +129,7 @@ pub async fn todos_create(
 }
 
 pub async fn todos_read(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Path(id): Path<usize>,
 ) -> Result<Json<Todo>, StatusCode> {
     let todos = state.todo_db.lock().await;
@@ -143,7 +143,7 @@ pub async fn todos_read(
 }
 
 pub async fn todos_update(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Path(id): Path<usize>,
     Json(todo): Json<Todo>,
 ) -> Result<Response<String>, StatusCode> {
@@ -164,7 +164,7 @@ pub async fn todos_update(
 }
 
 pub async fn todos_delete(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Path(id): Path<usize>,
 ) -> Result<StatusCode, StatusCode> {
     let mut todos = state.todo_db.lock().await;

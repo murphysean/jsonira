@@ -14,7 +14,7 @@ use crate::model::subject::AuthContext;
 use crate::model::subject::Subject;
 use crate::model::user::User;
 
-use super::ApiState;
+use super::AppState;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SimpleErr {
@@ -28,7 +28,7 @@ impl SimpleErr {
 }
 
 pub async fn get_current_session(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     auth_ctx: AuthContext,
 ) -> Result<(HeaderMap, Json<User>), StatusCode> {
     let Subject::User(user) = auth_ctx.subject else {
@@ -56,7 +56,7 @@ pub async fn get_current_session(
 
 #[axum::debug_handler]
 pub async fn handle_post_login(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Form(form): Form<HashMap<String, String>>,
 ) -> Result<(HeaderMap, StatusCode), StatusCode> {
     let email = form.get("username").ok_or(StatusCode::BAD_REQUEST)?;

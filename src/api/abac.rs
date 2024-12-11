@@ -10,7 +10,7 @@ pub trait PolicyDecisionPoint<E,S,R,A>{
     fn evaluate(environment: E, subject: S, resource: R, action: A) -> Decision;
 }
 
-struct PIPError{}
+pub struct PIPError{}
 
 pub trait PolicyInformationPoint<E,S,R,A>{
     fn get_environment(&self) -> Result<E,PIPError>;

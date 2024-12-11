@@ -10,11 +10,11 @@ use crate::model::{
     user::User,
 };
 
-use super::ApiState;
+use super::AppState;
 
 #[tracing::instrument(level = "info")]
 pub async fn tasks_post(
-    State(state): State<ApiState>,
+    State(state): State<AppState>,
     Json(task): Json<Task>,
 ) -> Result<Json<Task>, StatusCode> {
     //Need an authenticated user.
@@ -69,6 +69,6 @@ pub async fn tasks_post(
     Ok(Json(task))
 }
 
-pub async fn task_get(State(state): State<ApiState>) -> Result<Json<Task>, StatusCode> {
+pub async fn task_get(State(state): State<AppState>) -> Result<Json<Task>, StatusCode> {
     todo!()
 }

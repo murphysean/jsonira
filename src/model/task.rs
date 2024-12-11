@@ -4,12 +4,21 @@ use std::time::{Duration, SystemTime};
 use super::user::User;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Resolution {
+    Done,
+    WontDo,
+    Cancelled,
+    Duplicate,
+    ClosedForAge,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaskState {
-    Blocked,
+    Blocked(String),
     Todo,
     InProgress,
     InReview,
-    Complete,
+    Complete(Resolution),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

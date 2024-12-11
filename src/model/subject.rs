@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::api::{abac::{self, Decision}, ApiState};
+use crate::api::{abac::{self, Decision}, AppState};
 
 use super::user::User;
 
@@ -209,7 +209,7 @@ impl IntoResponse for SubjectRejection {
 #[async_trait]
 impl<S> FromRequestParts<S> for AuthContext
 where
-    S: Send + Sync, ApiState: FromRef<S>
+    S: Send + Sync, AppState: FromRef<S>
 {
     type Rejection = SubjectRejection;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
@@ -218,7 +218,7 @@ where
             return Err(SubjectRejection::FailedToResolveHost);
         };
         let Ok(OriginalUri(uri)) = OriginalUri::from_request_parts(parts, state).await;
-        let State(inner_state) :State<ApiState>  = State::from_request_parts(parts, state).await.unwrap();
+        let State(inner_state) :State<AppState>  = State::from_request_parts(parts, state).await.unwrap();
         //Pull session cookie
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
         if let Some(cookie) = jar.get("session") {
