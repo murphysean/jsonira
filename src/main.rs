@@ -4,6 +4,7 @@ use api::chat::{
 };
 use api::event::server_sent_events;
 use api::session::{get_current_session, handle_post_login};
+use api::task::tasks_post;
 use api::todo::{todos_create, todos_delete, todos_list, todos_read, todos_update};
 use api::user::{user_delete, user_get, user_patch, user_put, users_get, users_post};
 use api::ApiContext;
@@ -15,13 +16,13 @@ use axum::routing::method_routing::{delete, get, post, put};
 use axum::routing::patch;
 use axum::{BoxError, Router, ServiceExt};
 use axum_server::tls_rustls::RustlsConfig;
-use tower_http::trace::TraceLayer;
 use std::env;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::signal;
 use tower_http::services::ServeDir;
+use tower_http::trace::TraceLayer;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
 
@@ -45,7 +46,7 @@ async fn main() {
     let fmt_layer = tracing_subscriber::fmt::layer()
         .pretty()
         .with_filter(env_filter);
-        //.with_filter(LevelFilter::TRACE);
+    //.with_filter(LevelFilter::TRACE);
     tracing_subscriber::registry()
         .with(console_layer)
         .with(fmt_layer)
@@ -67,6 +68,7 @@ async fn main() {
         .route("/api/users/:id", put(user_put))
         .route("/api/users/:id", patch(user_patch))
         .route("/api/users/:id", delete(user_delete))
+        .route("/api/tasks", post(tasks_post))
         .route("/api/todos", get(todos_list))
         .route("/api/todos", post(todos_create))
         .route("/api/todos/:id", get(todos_read))
@@ -75,10 +77,7 @@ async fn main() {
         .route("/api/chat/rooms", get(chats_get_rooms))
         .route("/api/chat/rooms", post(chats_post_room))
         .route("/api/chat/rooms/:id", get(chats_get_room))
-        .route(
-            "/api/chat/rooms/:id/messages",
-            get(chats_get_room_messages),
-        )
+        .route("/api/chat/rooms/:id/messages", get(chats_get_room_messages))
         .route(
             "/api/chat/rooms/:id/messages",
             post(chats_post_room_message),

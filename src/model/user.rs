@@ -1,12 +1,16 @@
+use axum::extract::FromRequest;
 use jsonwebtokens::{encode, Algorithm, Verifier};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
+    default,
     error::Error,
     time::{Duration, Instant, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 use thiserror::Error;
 use uuid::Uuid;
+
+use super::subject::Subject;
 
 #[derive(Error, Debug)]
 pub enum UserError {
@@ -15,44 +19,124 @@ pub enum UserError {
     #[error("time issue")]
     TimeIssue,
     #[error("system time error")]
-    SystemTimeError(#[from]SystemTimeError),
+    SystemTimeError(#[from] SystemTimeError),
     #[error("jwt error")]
-    JwtError(#[from]jsonwebtokens::error::Error),
+    JwtError(#[from] jsonwebtokens::error::Error),
     #[error("parse error")]
     ParseError,
 }
 
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
-pub struct NewUser{
+pub struct NewUser {
     pub email: String,
     pub password: String,
     pub name: String,
 }
 
-impl Into<User> for NewUser{
-    fn into(self) -> User {
-        User { id: 0, email: self.email, name: self.name, groups: None }
+/// Attributes of a User
+/// Based on JWT list found here: https://www.iana.org/assignments/jwt/jwt.xhtml
+#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+pub struct User {
+    pub id: Option<i64>,
+    //Auth Attributes
+    pub email: Option<String>,
+    pub email_verified: Option<bool>,
+    pub phone_number_verified: Option<bool>,
+    ///System managed groups
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roles: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub groups: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entitlements: Option<Vec<String>>,
+    ///User managed groups
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub circles: Option<Vec<String>>,
+
+    //Self managed attributes
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub picture: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub website: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gender: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub birthdate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone_number: Option<String>,
+}
+
+impl From<NewUser> for User {
+    fn from(value: NewUser) -> Self {
+        Self {
+            id: None,
+            email: Some(value.email),
+            email_verified: Some(false),
+            phone_number_verified: Some(false),
+            roles: None,
+            groups: None,
+            entitlements: None,
+            circles: None,
+            name: Some(value.name),
+            profile: None,
+            picture: None,
+            website: None,
+            gender: None,
+            birthdate: None,
+            phone_number: None,
+        }
     }
 }
 
-#[derive(Default, Debug, Deserialize, Serialize, Clone)]
-pub struct User {
-    #[serde(default)]
-    pub id: i64,
-    #[serde(default)]
-    pub email: String,
-
-    #[serde(default)]
-    pub name: String,
-
-    //Auth Attributes
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub groups: Option<Vec<String>>,
+impl TryFrom<Value> for User {
+    type Error = eyre::Error;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let id: Option<i64> = value
+            .get("sub")
+            .and_then(|v| v.as_str())
+            .and_then(|v| v.parse::<i64>().ok())
+            .or(value.get("id").map(|v| {
+                let ret: i64 = match v {
+                    Value::Number(v) => v.as_i64().unwrap(),
+                    Value::String(s) => s.parse().unwrap(),
+                    _ => i64::default(),
+                };
+                ret
+            }));
+        Ok(Self {
+            id: id,
+            email: value
+                .get("email")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+            email_verified: Some(false),
+            phone_number_verified: Some(false),
+            roles: None,
+            groups: None,
+            entitlements: None,
+            circles: None,
+            name: value.get("name").and_then(|v| v.as_str()).map(String::from),
+            profile: None,
+            picture: None,
+            website: None,
+            gender: None,
+            birthdate: None,
+            phone_number: None,
+        })
+    }
 }
 
 impl User {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn simplify(&self) -> Subject {
+        Subject::UserId(self.id.unwrap_or_default())
     }
 
     pub fn create_token(&self, secret: &str) -> Result<String, UserError> {
@@ -66,7 +150,7 @@ impl User {
             .as_secs();
         let claims = json!({
             "iss": "https://www.mrfy.io",
-            "sub": format!("{}", &self.id),
+            "sub": format!("{}", &self.id.unwrap_or_default()),
             "aud": "https://www.mrfy.io",
             "iat": now,
             "nbf": now,
@@ -77,36 +161,5 @@ impl User {
             "email": &self.email,
         });
         Ok(encode(&header, &claims, &alg)?)
-    }
-
-    pub fn new_from_token(token: String, host: String) -> Result<User, UserError> {
-        let alg = Algorithm::new_hmac(jsonwebtokens::AlgorithmID::HS256, "secret").unwrap();
-        let verifier = Verifier::create()
-            .issuer("https://www.mrfy.io")
-            .audience(format!("https://{}", host))
-            .build()?;
-        let claims: Value = verifier.verify(&token, &alg)?;
-        Ok(Self {
-            id: claims
-                .get("sub")
-                .ok_or(UserError::InvalidData)?
-                .as_str()
-                .ok_or(UserError::InvalidData)?
-                .parse()
-                .map_err(|_|UserError::ParseError)?,
-            email: claims
-                .get("email")
-                .ok_or(UserError::InvalidData)?
-                .as_str()
-                .ok_or(UserError::InvalidData)?
-                .to_owned(),
-            name: claims
-                .get("name")
-                .ok_or(UserError::InvalidData)?
-                .as_str()
-                .ok_or(UserError::InvalidData)?
-                .to_owned(),
-            groups: None,
-        })
     }
 }

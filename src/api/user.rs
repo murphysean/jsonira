@@ -1,6 +1,9 @@
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::Json;
+use headers::HeaderMapExt;
+use json_patch::Patch;
+use serde_json::{from_str, json, Value};
 use tracing::{debug, error};
 
 use crate::db::user::UserDbError;
@@ -8,82 +11,105 @@ use crate::model::user::{NewUser, User};
 
 use super::ApiContext;
 
-pub struct DbUser{
-    pub name: String,
-    pub groups: Option<Vec<String>>,
-}
-
-impl From<User> for DbUser{
-    fn from(value: User) -> Self {
-        Self { name: value.name, groups: value.groups }
-    }
-}
-
+#[tracing::instrument(level = "info")]
 pub async fn users_get(State(state): State<ApiContext>) -> Result<Json<Vec<User>>, StatusCode> {
     let result = state.user_db.read_users().await;
-    if result.is_err() {
-        result.as_ref().inspect_err(|e| debug!("Error: {}", e));
-    }
-    match result{
+    match result.inspect_err(|e| debug!("Error: {}", e)) {
         Ok(users) => Ok(Json(users)),
         Err(UserDbError::NoneFound) => Ok(Json(vec![])),
         _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
+#[tracing::instrument(level = "info")]
 pub async fn users_post(
     State(state): State<ApiContext>,
     Json(user): Json<NewUser>,
 ) -> Result<Json<User>, StatusCode> {
-    let result = state.user_db.create_user(user.email.clone(), user.password.clone(), user.into()).await;
-    if result.is_err(){
-        error!("error");
-        result.as_ref().inspect_err(|e| debug!("Error: {}", e));
+    let result = state
+        .user_db
+        .create_user(user.email.clone(), user.password.clone(), user.into())
+        .await;
+    match result.inspect_err(|e| debug!("Error: {}", e)) {
+        Ok(user) => Ok(Json(user)),
+        _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
-    let Ok(user) = result else {
-        return Err(StatusCode::BAD_REQUEST);
-    };
-    Ok(Json(user))
 }
 
+#[tracing::instrument(level = "info")]
 pub async fn user_get(
     State(state): State<ApiContext>,
     Path(id): Path<i64>,
 ) -> Result<Json<User>, StatusCode> {
     error!(id);
     let result = state.user_db.read_user(id).await;
-    if result.is_err() {
-        error!("error");
-        result.as_ref().inspect_err(|e| debug!("Error: {}", e));
-        return Err(StatusCode::NOT_FOUND);
+    match result.inspect_err(|e| debug!("Error: {}", e)) {
+        Ok(user) => Ok(Json(user)),
+        Err(UserDbError::NoneFound) => Err(StatusCode::NOT_FOUND),
+        _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
-    debug!("I'm here");
-    let user = result.unwrap();
-    Ok(Json(user))
 }
 
+#[tracing::instrument(level = "info")]
 pub async fn user_put(
     State(state): State<ApiContext>,
     Path(id): Path<i64>,
-    Json(user): Json<User>,
+    Json(mut user): Json<User>,
 ) -> Result<Json<User>, StatusCode> {
-    let Ok(user) = state.user_db.update_user(id, user).await else {
-        return Err(StatusCode::NOT_FOUND);
-    };
-    Ok(Json(user))
+    user.id = Some(id);
+    let result = state.user_db.update_user(id, user).await;
+    match result.inspect_err(|e| debug!("Error: {}", e)) {
+        Ok(user) => Ok(Json(user)),
+        Err(UserDbError::NoneFound) => Err(StatusCode::NOT_FOUND),
+        _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
 }
 
+#[tracing::instrument(level = "info")]
 pub async fn user_patch(
     State(state): State<ApiContext>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
-    Json(user): Json<User>,
+    body: String,
 ) -> Result<Json<User>, StatusCode> {
-    let Ok(user) = state.user_db.update_user(id, user).await else {
+    let Ok(user) = state.user_db.read_user(id).await else {
         return Err(StatusCode::NOT_FOUND);
     };
-    Ok(Json(user))
+    let mut doc: Value = json!(&user);
+    match headers.get("content-type") {
+        Some(hv) if hv == HeaderValue::from_static("application/json-patch+json") => {
+            let patch: Patch = from_str(&body).map_err(|e| {
+                error!(error= %e);
+                StatusCode::BAD_REQUEST
+            })?;
+            json_patch::patch(&mut doc, &patch).map_err(|e| {
+                error!(error= %e);
+                StatusCode::BAD_REQUEST
+            })?;
+        }
+        Some(hv) if hv == HeaderValue::from_static("application/json") => {
+            let patch: Value = from_str(&body).map_err(|e| {
+                error!(error= %e);
+                StatusCode::BAD_REQUEST
+            })?;
+            json_patch::merge(&mut doc, &patch);
+        }
+        _ => return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE),
+    }
+    let mut user: User = doc.try_into().map_err(|e| {
+        error!(error= %e);
+        StatusCode::BAD_REQUEST
+    })?;
+    user.id = Some(id);
+    let result = state.user_db.update_user(id, user).await;
+    match result.inspect_err(|e| debug!("Error: {}", e)) {
+        Ok(user) => Ok(Json(user)),
+        Err(UserDbError::NoneFound) => Err(StatusCode::NOT_FOUND),
+        _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
 }
 
+#[tracing::instrument(level = "info")]
 pub async fn user_delete(
     State(state): State<ApiContext>,
     Path(id): Path<i64>,

@@ -1,3 +1,4 @@
+use axum::debug_handler;
 use axum::extract::Host;
 use axum::extract::State;
 use axum::http::HeaderMap;
@@ -5,11 +6,12 @@ use axum::http::StatusCode;
 use axum::Form;
 use axum::Json;
 use axum_extra::extract::CookieJar;
-use axum::debug_handler;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
+use crate::model::subject::AuthContext;
+use crate::model::subject::Subject;
 use crate::model::user::User;
 
 use super::ApiContext;
@@ -27,23 +29,33 @@ impl SimpleErr {
 
 pub async fn get_current_session(
     State(state): State<ApiContext>,
-    jar: CookieJar,
-    Host(host): Host,
-) -> Result<Json<User>, StatusCode> {
-    let Some(cookie) = jar.get("session") else {
-        return Err(StatusCode::NOT_FOUND);
+    auth_ctx: AuthContext,
+) -> Result<(HeaderMap, Json<User>), StatusCode> {
+    println!("HERE 1");
+    let Subject::User(user) = auth_ctx.subject else {
+        return Err(StatusCode::UNAUTHORIZED);
     };
-    let user = match User::new_from_token(cookie.value().to_string(), host) {
-        Err(e) => {
-            tracing::error!("{}", e);
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-        Ok(user) => user,
+    println!("HERE 2 {:?}", &user);
+    let Some(id) = user.id else {
+        return Err(StatusCode::UNAUTHORIZED);
     };
-    if state.user_db.read_user(user.id).await.is_err() {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    Ok(Json(user))
+    println!("HERE 3");
+    let mut headers = HeaderMap::new();
+    if let Ok(user) = state.user_db.read_user(id).await {
+        let token = user.create_token(&state.token_secret).unwrap();
+        println!("HERE 4");
+        headers.insert(
+            "Set-Cookie",
+            format!(
+                "session={}; path=/; HttpOnly; SameSite=Strict; Secure",
+                token
+            )
+            .parse()
+            .unwrap(),
+        );
+    };
+    //Always update the session with a new cookie
+    Ok((headers, Json(user)))
 }
 
 #[axum::debug_handler]
@@ -55,11 +67,7 @@ pub async fn handle_post_login(
     let password = form.get("password").ok_or(StatusCode::BAD_REQUEST)?;
     let mut headers = HeaderMap::new();
     headers.insert("Location", "/index.html".parse().unwrap());
-    if let Ok(user) = state
-        .user_db
-        .authenticate_user(email, password)
-        .await
-    {
+    if let Ok(user) = state.user_db.authenticate_user(email, password).await {
         let token = user.create_token(&state.token_secret).unwrap();
         headers.insert(
             "Set-Cookie",

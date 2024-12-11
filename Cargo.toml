@@ -41,3 +41,8 @@ thiserror = "2.0.6"
 anyhow = "1.0.94"
 
 sqlite = "0.36.1"
+json-patch = "3.0.1"
+eyre = "0.6.12"
+jiff = { version = "0.1.15", features = ["serde"] }
+humantime = "2.1.0"
+humantime-serde = "1.1.1"
