@@ -1,10 +1,9 @@
-use std::{default, result};
 
 use axum::{
     async_trait,
-    extract::{FromRef, FromRequestParts, Host, OriginalUri, Path, State},
-    http::{request::Parts, Method, StatusCode, Uri},
-    response::{IntoResponse, IntoResponseParts},
+    extract::{FromRef, FromRequestParts, Host, OriginalUri, State},
+    http::{request::Parts, StatusCode},
+    response::IntoResponse,
 };
 use axum_extra::extract::CookieJar;
 use eyre::eyre;
@@ -102,6 +101,20 @@ impl TryFrom<Value> for Subject {
 impl From<User> for Subject {
     fn from(value: User) -> Self {
         Self::User(value)
+    }
+}
+
+impl Subject {
+    pub fn in_circle(&self, circle: &Option<String>) -> bool {
+        let Some(circle) = circle else {
+            return false;
+        };
+        match self {
+            Subject::User(user) => {
+                matches!(user.circles.as_ref(), Some(v) if v.contains(circle))
+            }
+            _ => false,
+        }
     }
 }
 
@@ -217,24 +230,33 @@ where
 {
     type Rejection = SubjectRejection;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        println!("FRP HERE 1");
         let result = Host::from_request_parts(parts, state).await;
         let Ok(Host(host)) = result else {
             return Err(SubjectRejection::FailedToResolveHost);
         };
+        println!("FRP HERE 2");
         let Ok(OriginalUri(uri)) = OriginalUri::from_request_parts(parts, state).await;
         let State(inner_state): State<AppState> =
             State::from_request_parts(parts, state).await.unwrap();
+        println!("FRP HERE 3");
         //Pull session cookie
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
+        println!("FRP HERE 4");
         if let Some(cookie) = jar.get("session") {
             let token = cookie.value().to_string();
-            let alg =
-                Algorithm::new_hmac(jsonwebtokens::AlgorithmID::HS256, inner_state.token_secret)?;
+            let alg = Algorithm::new_hmac(
+                jsonwebtokens::AlgorithmID::HS256,
+                inner_state.token_secret.as_str(),
+            )?;
             let verifier = Verifier::create()
                 .issuer("https://www.mrfy.io")
                 .audience(format!("https://{}", host))
                 .build()?;
+            println!("FRP HERE 5 sec: {}", inner_state.token_secret.as_str());
+            println!("FRP HERE 6 {:?}", verifier.verify(&token, &alg));
             let claims: Value = verifier.verify(&token, &alg)?;
+            println!("FRP HERE 7");
             let ctx = AuthContext {
                 subject: claims.clone().try_into()?,
                 client: Client {
@@ -260,6 +282,7 @@ where
                     method: parts.method.as_str().to_owned(),
                 },
             };
+            println!("FRP HERE 7");
             return Ok(ctx);
         }
 
@@ -276,6 +299,23 @@ mod tests {
 
     #[test]
     fn test_subject_serialization() {
+        let usub: Subject = from_str(
+            r#"{
+            id: 1,
+            "email": "murphysean84@gmail.com",
+            "name": "Sean Murphy"
+        }"#,
+        )
+        .unwrap();
+        println!("Simple Email: {:?}", usub);
+        assert_eq!(
+            usub,
+            Subject::UserEmail(String::from("murphysean84@gmail.com"))
+        );
+    }
+
+    #[test]
+    fn test_simple_subject_serialization() {
         let simple_email: Subject = from_str("\"murphysean84@gmail.com\"").unwrap();
         println!("Simple Email: {:?}", simple_email);
         assert_eq!(

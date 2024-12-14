@@ -1,12 +1,7 @@
-use axum::extract::FromRequest;
-use jsonwebtokens::{encode, Algorithm, Verifier};
+use jsonwebtokens::{encode, Algorithm};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{
-    default,
-    error::Error,
-    time::{Duration, Instant, SystemTime, SystemTimeError, UNIX_EPOCH},
-};
+use std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -40,7 +35,9 @@ pub struct User {
     pub id: Option<i64>,
     //Auth Attributes
     pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub email_verified: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub phone_number_verified: Option<bool>,
     ///System managed groups
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,6 +65,17 @@ pub struct User {
     pub birthdate: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phone_number: Option<String>,
+}
+
+impl User {
+    pub fn simple(id: i64, name: &str, email: &str) -> Self {
+        Self {
+            id: Some(id),
+            email: Some(String::from(email)),
+            name: Some(String::from(name)),
+            ..Default::default()
+        }
+    }
 }
 
 impl From<NewUser> for User {
@@ -136,7 +144,12 @@ impl User {
     }
 
     pub fn simplify(&self) -> Subject {
-        Subject::UserId(self.id.unwrap_or_default())
+        Subject::User(User {
+            id: self.id,
+            email: self.email.clone(),
+            name: self.name.clone(),
+            ..Default::default()
+        })
     }
 
     pub fn create_token(&self, secret: &str) -> Result<String, UserError> {

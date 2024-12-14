@@ -1,11 +1,8 @@
-use axum::debug_handler;
-use axum::extract::Host;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
 use axum::Form;
 use axum::Json;
-use axum_extra::extract::CookieJar;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -31,15 +28,19 @@ pub async fn get_current_session(
     State(state): State<AppState>,
     auth_ctx: AuthContext,
 ) -> Result<(HeaderMap, Json<User>), StatusCode> {
+    println!("HERE 1");
     let Subject::User(user) = auth_ctx.subject else {
         return Err(StatusCode::UNAUTHORIZED);
     };
+    println!("HERE 2");
     let Some(id) = user.id else {
         return Err(StatusCode::UNAUTHORIZED);
     };
+    println!("HERE 3");
     let mut headers = HeaderMap::new();
     if let Ok(user) = state.user_db.read_user(id).await {
         let token = user.create_token(&state.token_secret).unwrap();
+        println!("HERE 4");
         headers.insert(
             "Set-Cookie",
             format!(

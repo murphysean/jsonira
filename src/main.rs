@@ -4,7 +4,7 @@ use api::chat::{
 };
 use api::event::server_sent_events;
 use api::session::{get_current_session, handle_post_login};
-use api::task::tasks_post;
+use api::task::{task_get, task_patch, tasks_get, tasks_post};
 use api::todo::{blank_db, Todo};
 use api::todo::{todos_create, todos_delete, todos_list, todos_read, todos_update};
 use api::user::{user_delete, user_get, user_patch, user_put, users_get, users_post};
@@ -16,7 +16,10 @@ use axum::routing::method_routing::{delete, get, post, put};
 use axum::routing::patch;
 use axum::{BoxError, Router, ServiceExt};
 use axum_server::tls_rustls::RustlsConfig;
+use axum_template::engine::Engine;
+use db::task::TaskDb;
 use db::{chat::ChatDb, user::UserDb};
+use handlebars::{DirectorySourceOptions, Handlebars};
 use std::env;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -26,8 +29,8 @@ use tokio::signal;
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
-use tracing::level_filters::LevelFilter;
 use tracing_subscriber::prelude::*;
+use web::task::view_task;
 
 mod api;
 mod db;
@@ -38,9 +41,11 @@ mod web;
 pub struct AppState {
     pub token_secret: String,
     pub user_db: Arc<UserDb>,
+    pub task_db: Arc<TaskDb>,
     pub chat_db: Arc<ChatDb>,
     pub todo_db: Arc<Mutex<Vec<Todo>>>,
     //task_db: Arc<TaskDb>,
+    pub engine: Engine<Handlebars<'static>>,
 }
 
 impl Debug for AppState {
@@ -50,19 +55,26 @@ impl Debug for AppState {
 }
 
 impl AppState {
-    pub fn new(secret_key: String) -> Self {
+    pub fn new() -> Self {
+        let secret_key = env::var("SECRET_KEY").unwrap_or(String::from("secret"));
+        let mut hbs = Handlebars::new();
+        hbs.register_templates_directory("web/templates", DirectorySourceOptions::default())
+            .unwrap();
+        hbs.set_dev_mode(true);
+
         Self {
             token_secret: secret_key,
             user_db: Arc::new(UserDb::new().unwrap()),
+            task_db: Arc::new(TaskDb::new().unwrap()),
             chat_db: Arc::new(ChatDb::new().unwrap()),
             todo_db: blank_db(),
+            engine: Engine::from(hbs),
         }
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let secret_key = env::var("SECRET_KEY").unwrap_or(String::from("secret"));
     let console_layer = console_subscriber::spawn();
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         // axum logs rejections from built-in extractors with the `axum::rejection`
@@ -82,7 +94,7 @@ async fn main() {
         .with(fmt_layer)
         .init();
 
-    let context = AppState::new(secret_key);
+    let context = AppState::new();
 
     // Create a handle for our tls server so the shutdown signal can all shutdown
     let handle = axum_server::Handle::new();
@@ -98,7 +110,10 @@ async fn main() {
         .route("/api/users/:id", put(user_put))
         .route("/api/users/:id", patch(user_patch))
         .route("/api/users/:id", delete(user_delete))
+        .route("/api/tasks", get(tasks_get))
         .route("/api/tasks", post(tasks_post))
+        .route("/api/tasks/:id", get(task_get))
+        .route("/api/tasks/:id", patch(task_patch))
         .route("/api/todos", get(todos_list))
         .route("/api/todos", post(todos_create))
         .route("/api/todos/:id", get(todos_read))
@@ -115,6 +130,7 @@ async fn main() {
         .route("/api/events", get(server_sent_events))
         .route("/login", post(handle_post_login))
         .route("/session", get(get_current_session))
+        .route("/task/:id", get(view_task))
         .fallback_service(ServeDir::new("web"))
         .layer(TraceLayer::new_for_http())
         .with_state(context);

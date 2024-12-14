@@ -20,8 +20,8 @@ tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 axum = { version = "0.7.9", features = ["http2", "ws", "multipart", "macros"] }
 axum-server = {version = "0.7", features = ["tls-rustls"]}
 axum-extra = { version = "0.9.6", features = ["cookie", "form", "query", "typed-header"] }
-#http = "1.0"
-#http-body-util = "0.1"
+axum-template = { version = "2.4.0", features = ["handlebars"] }
+handlebars = { version = "6.2.0", features = ["dir_source", "string_helpers"] }
 headers = "0.4.0"
 
 futures = "0.3.31"
@@ -38,12 +38,9 @@ argon2 = { version = "0.5.3", features = ["std"]}
 base64 = "0.22.1"
 
 thiserror = "2.0.6"
-anyhow = "1.0.94"
+eyre = "0.6.12"
 
 sqlite = "0.36.1"
 json-patch = "3.0.1"
-eyre = "0.6.12"
 jiff = { version = "0.1.15", features = ["serde"] }
-humantime = "2.1.0"
-humantime-serde = "1.1.1"
-axum-template = { version = "2.4.0", features = ["handlebars"] }
+color-eyre = "0.6.3"

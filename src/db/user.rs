@@ -8,7 +8,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tracing::{debug, event};
 
 use crate::model::user::User;
 
@@ -192,9 +191,7 @@ impl UserDb {
         statement.bind((":obj", obj.as_str()))?;
         statement.bind((":id", id))?;
 
-        let Ok(sqlite::State::Row) = statement.next() else {
-            return Err(UserDbError::NoneFound);
-        };
+        statement.next()?;
         user.id = Some(id);
         Ok(user)
     }
@@ -218,7 +215,7 @@ mod tests {
         password_hash::{rand_core::OsRng, SaltString},
         Argon2, PasswordHash, PasswordVerifier,
     };
-    use base64::{prelude::BASE64_URL_SAFE, Engine};
+    
 
     #[test]
     fn simple_argon2() {

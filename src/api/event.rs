@@ -1,13 +1,8 @@
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum_extra::{headers, TypedHeader};
 use futures::stream::{self, Stream};
-use futures_util::{SinkExt, StreamExt, TryFutureExt};
-use std::collections::HashMap;
-use std::{convert::Infallible, path::PathBuf, time::Duration};
-use tokio::sync::{mpsc, RwLock};
+use std::{convert::Infallible, time::Duration};
 use tokio_stream::StreamExt as _;
-use tower_http::{services::ServeDir, trace::TraceLayer};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 //static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 
