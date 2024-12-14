@@ -51,6 +51,7 @@
             <div>
                 <label for="title">Title:</label>
                 <input type="text" id="title" name="title" value=""/>
+                <input id="update-title-button" class="update-button" type="button" value="Update" onclick="update_title_from_input()"/>
             </div>
             <div>
                 <label>Reporter:</label>
@@ -62,7 +63,7 @@
                 </form>
                 <label for="watcher">Add Watcher:</label>
                 <input type="text" id="watcher" name="watcher" list="users"/>
-                <input id="add-watcher-button" class="add-button" type="button" value="Add Watcher"/>
+                <input id="add-watcher-button" class="add-button" type="button" value="Add Watcher" onclick="add_watcher_from_input()"/>
             </div>
             <div>
                 <label for="circle">Circle:</label>
@@ -71,27 +72,27 @@
             <div>
                 <label for="assignee">Assignee:</label>
                 <input type="text" id="assignee" name="assignee" list="users" value=""/>
-                <input id="update-assignee-button" class="update-button" type="button" value="Update"/>
+                <input id="update-assignee-button" class="update-button" type="button" value="Update" onclick="update_assignee_from_input()"/>
             </div>
             <div>
                 <label for="priority">Priority:</label>
                 <input type="text" id="priority" name="priority" list="priorities" value=""/>
-                <input id="update-priority-button" class="update-button" type="button" value="Update"/>
+                <input id="update-priority-button" class="update-button" type="button" value="Update" onclick="update_priority_from_input()"/>
             </div>
             <div>
                 <label for="estimate">Estimate (8601 time span... P1y2m3dT4h5m6s):</label>
                 <input type="text" id="estimate" name="estimate" value=""/>
-                <input id="update-estimate-button" class="update-button" type="button" value="Update"/>
+                <input id="update-estimate-button" class="update-button" type="button" value="Update" onclick="update_estimate_from_input()"/>
             </div>
             <div>
                 <label for="points">Points:</label>
                 <input type="text" id="points" name="points" value=""/>
-                <input id="update-points-button" class="update-button" type="button" value="Update"/>
+                <input id="update-points-button" class="update-button" type="button" value="Update" onclick="update_points_from_input()"/>
             </div>
             <div>
                 <label for="state">State:</label>
                 <input type="text" id="state" name="state" list="states" value=""/>
-                <input id="update-state-button" class="update-button" type="button" value="Update"/>
+                <input id="update-state-button" class="update-button" type="button" value="Update" onclick="update_state_from_input()"/>
             </div>
             <div>
                 <label for="tags">Tags:</label>
@@ -99,32 +100,34 @@
                 </form>
                 <label for="tag">Add Tag:</label>
                 <input type="text" id="tag" name="tag"/>
-                <input id="add-tag-button" class="add-button" type="button" value="Add Tag"/>
+                <input id="add-tag-button" class="add-button" type="button" value="Add Tag" onclick="add_tag_from_input()"/>
             </div>
             <div>Created: <span id="created"></span></div>
             <div>Updated: <span id="updated"></span></div>
             <div>
                 <label for="due">Due:</label>
                 <input type="date" id="due" name="due" value=""/>
-                <input id="update-due-button" class="update-button" type="button" value="Update"/>
+                <input id="update-due-button" class="update-button" type="button" value="Update" onclick="update_due_from_input()"/>
             </div>
         </section>
         <section>
             <label for="description">Description:</label>
             <textarea id="description" name="description" rows="16" cols="60"></textarea>
-            <input id="update-description-button" class="update-button" type="button" value="Update">
+            <input id="update-description-button" class="update-button" type="button" value="Update" onclick="update_description_from_input()">
         </section>
-        <section id="comments">
+        <section>
+            <section id="comments">
+            </section>
+            <label for="comment">Add Comment:</label>
             <input id="comment" type="text">
-            <input id="add-comment-button" class="add-button" type="button" value="Add Comment"/>
+            <input id="add-comment-button" class="add-button" type="button" value="Add Comment" onclick="add_comment_from_input()"/>
         </section>
-            <p>Reactions: {{task.reactions}}</p>
-            <p>Reviews: {{task.reviews}}</p>
-            <p>History: {{task.history}}</p>
+        <p>Reactions: TODO</p>
+        <p>Reviews: TODO</p>
         <section id="history">
-            {{#each task.history}}<article id="hitory-{{@index}}">
-                <div>Updates by {{subject.name}} on {{patched}}</div>
-            </article>{{/each}}
+            <article id="hitory-1">
+                <div>Updates by NAME on DATE</div>
+            </article>
         </section>
         <nav>
             <p>Load Task From local storage</p>

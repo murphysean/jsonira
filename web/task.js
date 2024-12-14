@@ -13,6 +13,7 @@ const tags_form = document.getElementById("tags");
 const add_tag_input = document.getElementById("tag");
 const due_input = document.getElementById("due");
 const description_input = document.getElementById("description");
+const comments_section = document.getElementById("comments");
 const add_comment_input = document.getElementById("comment");
 
 let authenticated_user = null;
@@ -113,12 +114,14 @@ function reset_view(){
     estimate_input.value = "";
     points_input.value = "";
     state_input.value = "";
-    //TODO Clear tags
+    //Clear tags
+    tags_form.replaceChildren();
     created.innerText = ""
     updated.innerText = ""
     due_input.value = "";
     description_input.value = "";
-    //TODO Clear comments
+    //Clear comments
+    comments_section.replaceChildren();
     add_comment_input.value = "";
 }
 
@@ -126,7 +129,8 @@ function update_view(task){
     title_input.value = task.title;
     reporter_span.innerText = task.reporter.name;
     reporter_span.dataset = task.reporter;
-    for (w in task.watchers){
+    //Fix issue here
+    for (w of task.watchers){
         add_watcher(w);
     }
     circle_input.value = task.circle;
@@ -136,13 +140,19 @@ function update_view(task){
     priority_input.value = task.priority;
     estimate_input.value = task.estimate;
     points_input.value = task.points;
-    state_input.value = task.state;
-    //TODO Build tags
+    state_input.value = task.state.state;
+    //Build tags
+    for (t of task.tags){
+        add_tag(t);
+    }
     created.innerText = task.created;
     updated.innerText = task.updated;
     due_input.value = task.due;
     description_input.value = task.description;
-    //TODO Build comments
+    //Build comments
+    for (c of task.comments){
+        add_comment(c);
+    }
 }
 
 async function check_session() {
@@ -169,8 +179,10 @@ async function get_task(id){
             const json = await response.json();
             console.log(json);
             current_task = json;
-            //TODO call a function that will update the view with the returned task
+            //call a function that will update the view with the returned task
             update_view(json);
+            //turn on all updates
+            for (e of document.getElementsByClassName("update-button")) {e.className = "update-button"}
         } else {
             throw new Error(`Response status: ${response.status}`);
         }
@@ -255,6 +267,18 @@ function get_user_from_dataset(element) {
     return user;
 } 
 
+function update_title_from_input(){
+    if(title_input.value){
+        //If I have an active task on the page then send it up as an individual patch
+        if(current_task){
+            current_task.title = title_input.value;
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/title", "value": title_input.value}
+            ]);
+        }
+    }
+}
+
 function add_watcher_from_input(){
     let v = add_watcher_input.value;
     let option = document.querySelector("#users option[value='" + v + "']");
@@ -263,6 +287,7 @@ function add_watcher_from_input(){
     }else{
         add_watcher({id: null, email: v, name:v})
     }
+    add_watcher_input.value = "";
 }
 
 function add_watcher(dataset){
@@ -280,34 +305,139 @@ function add_watcher(dataset){
     input.checked = true;
     let label = document.createElement("label");
     label.for = "watcher-" + eid;
-    let text = document.createTextNode(add_watcher_input.value);
+    let text = document.createTextNode(dataset.name);
     label.appendChild(text);
     
     watchers_form.appendChild(input);
     watchers_form.appendChild(label);
-    add_watcher_input.value = "";
 }
-document.getElementById("add-watcher-button").addEventListener("click", add_watcher_from_input);
 
-function add_tag(){
+function update_assignee_from_input(){
+    if(assignee_input.value){
+        let assignee = {};
+        let v = assignee_input.value;
+        let option = document.querySelector("#users option[value='" + v + "']");
+        if(option){
+            assignee = get_user_from_dataset(option);
+        }else{
+            assignee = {id: null, email: v, name:v};
+        }
+        //If I have an active task on the page then send it up as an individual patch
+        if(current_task){
+            current_task.assignee = assignee;
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/assignee", "value": assignee}
+            ]);
+        }
+    }
+}
+
+function update_priority_from_input(){
+    if(priority_input.value){
+        //If I have an active task on the page then send it up as an individual patch
+        if(current_task){
+            current_task.priority = priority_input.value;
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/priority", "value": priority_input.value}
+            ]);
+        }
+    }
+}
+
+function update_estimate_from_input(){
+    if(estimate_input.value){
+        //If I have an active task on the page then send it up as an individual patch
+        if(current_task){
+            current_task.estimate = estimate_input.value;
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/estimate", "value": estimate_input.value}
+            ]);
+        }
+    }
+}
+
+function update_points_from_input(){
+    if(points_input.value){
+        //If I have an active task on the page then send it up as an individual patch
+        if(current_task){
+            current_task.points = Number(points_input.value);
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/points", "value": Number(points_input.value)}
+            ]);
+        }
+    }
+}
+
+function update_state_from_input(){
+    if(state_input.value){
+        let state = {};
+        let v = state_input.value;
+        let option = document.querySelector("#states option[value='" + v + "']");
+        if(option){
+            state = {
+                state: option.dataset.state,
+                reason: option.dataset.reason,
+                resolution: option.dataset.resolution,
+            };
+            //If I have an active task on the page then send it up as an individual patch
+            if(current_task){
+                current_task.state = state;
+                patch_task(current_task.id, [
+                    {"op": "replace", "path": "/state", "value": state}
+                ]);
+            }
+        }
+    }
+}
+
+function add_tag_from_input(){
+    let v = add_tag_input.value;
+    add_tag(v);
+    add_tag_input.value = "";
+}
+
+function add_tag(tag){
+    const eid = tags_form.children.length + 1;
     let input = document.createElement("input")
     input.type = "checkbox";
-    input.id = "tag-" + add_tag_input.value;
+    input.id = "tag-" + eid;
     input.name = "tag";
-    input.value = add_tag_input.value;
+    input.value = tag;
     input.checked = true;
     let label = document.createElement("label");
-    label.for = "tag-" + add_tag_input.value;
-    let text = document.createTextNode(add_tag_input.value);
+    label.for = "tag-" + eid;
+    let text = document.createTextNode(tag);
     label.appendChild(text);
     
     tags_form.appendChild(input);
     tags_form.appendChild(label);
-    add_tag_input.value = "";
 }
-document.getElementById("add-tag-button").addEventListener("click", add_tag);
 
-function add_comment(){
+function update_due_from_input(){
+    if(due_input.value){
+        //If I have an active task on the page then send it up as an individual patch
+        if(current_task){
+            current_task.due = due_input.value;
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/due", "value": due_input.value}
+            ]);
+        }
+    }
+}
+
+function update_description_from_input(){
+    if(description_input.value){
+        //If I have an active task on the page then send it up as an individual patch
+        if(current_task){
+            current_task.due = description_input.value;
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/description", "value": description_input.value}
+            ]);
+        }
+    }
+}
+
+function add_comment_from_input(){
     const now = new Date;
     let comment = {
         subject: {
@@ -319,23 +449,9 @@ function add_comment(){
         content_type: "text/plain",
         created: now.toISOString(),
     };
-    const comments = document.getElementById("comments");
-    const aid = comments.children.length+1;
-    let article = document.createElement("article")
-    article.id = "comment-" + aid;
-    article.dataset.subject = {
-        id: authenticated_user.id,
-        name: authenticated_user.name,
-        email: authenticated_user.email,
-    };
-    let div = document.createElement("div");
-    let text = document.createTextNode(add_comment_input.value);
-    div.appendChild(text);
-    article.appendChild(div);
-    
-    comments.appendChild(article);
-    add_comment_input.value = "";
-    
+
+    add_comment(comment);
+
     //If I have an active task on the page then send it up as an individual patch
     if(current_task){
         patch_task(current_task.id, [
@@ -343,6 +459,27 @@ function add_comment(){
         ]);
     }
 }
-document.getElementById("add-comment-button").addEventListener("click", add_comment);
+
+function add_comment(comment){
+    const eid = comments_section.children.length+1;
+    let article = document.createElement("article")
+    article.id = "comment-" + eid;
+    article.dataset.subject = {
+        id: authenticated_user.id,
+        name: authenticated_user.name,
+        email: authenticated_user.email,
+    };
+    let footer = document.createElement("footer");
+    footer.innerText = "By " + comment.subject.name + " on " + comment.created;
+    let div = document.createElement("div");
+    let text = document.createTextNode(comment.comment);
+    div.appendChild(text);
+    article.appendChild(div);
+    article.appendChild(footer);
+    
+    comments.appendChild(article);
+    add_comment_input.value = "";
+    
+}
 
 check_session();
