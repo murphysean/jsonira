@@ -3,8 +3,10 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode},
     Json,
 };
+use axum_extra::extract::Query;
 use jiff::Timestamp;
 use json_patch::Patch;
+use serde::Deserialize;
 use serde_json::{from_str, from_value, to_value, Value};
 use tracing::{debug, error};
 
@@ -17,21 +19,41 @@ use crate::AppState;
 
 use super::abac::Decision;
 
+#[derive(Debug, Deserialize)]
+pub struct TasksQueryParams {
+    #[serde(default)]
+    pub tag: Vec<String>,
+    #[serde(default)]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
 #[tracing::instrument(level = "info")]
 pub async fn tasks_get(
     State(state): State<AppState>,
     auth_ctx: AuthContext,
+    Query(query): Query<TasksQueryParams>,
 ) -> Result<Json<Vec<Task>>, (StatusCode, String)> {
+    let mut limit = query.limit;
+    if limit == 0 {
+        limit = 100
+    };
     let Subject::User(user) = auth_ctx.subject else {
         return Err((
             StatusCode::FORBIDDEN,
             String::from("Authenticated Subject is not a user"),
         ));
     };
-    //TODO Get tags off request
-    let tags: Option<Vec<String>> = Some(vec![]);
 
-    match state.task_db.read_tasks(100, 0, user.circles, tags).await {
+    println!("circles: {:?}", user.circles);
+    println!("Tags: {:?}", query.tag);
+
+    match state
+        .task_db
+        .read_tasks(limit, query.offset, user.circles, Some(query.tag))
+        .await
+    {
         Ok(users) => Ok(Json(users)),
         Err(error) => {
             error!("{:?}", error);

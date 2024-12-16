@@ -75,6 +75,13 @@
         <script>
             let tasks = [];
             let authenticated_user = null;
+            function load_board(){
+                const board_input = document.getElementById("board-input");
+                window.location.search="?tag="+board_input.value;
+                get_tasks(window.location.search);
+                const params = new URLSearchParams(window.location.search);
+                document.getElementById("tag-header").innerText = params.get('tag');
+            }
             async function check_session() {
                 //TODO Check if I am currently authenticated
                 try{
@@ -153,7 +160,7 @@
             </article>
          </template>
         <!-- End Templates -->
-        <h1 class="tag-header">Week50</h1>
+        <h1 id="tag-header" class="tag-header"></h1>
         <header id="board-header" class="board-header">
             <h2 class="state-header">Blocked</h2>
             <h2 class="state-header">Todo</h2>
@@ -172,6 +179,12 @@
             </section>
             <section id="complete" name="state" class="state" data-state="complete" data-resolution="done" ondragover="dragover(event)" ondrop="drop(event)">
             </section>
+        </section>
+        <section>
+            <header>Navigate to board</header>
+            <lable for="board-input">Board:</lable>
+            <input type="text" id="board-input" value=""/>
+            <input type="button" value="Submit" onclick="load_board()"/>
         </section>
         <section id="scorecard" class="scorecard">
         </section>
@@ -198,9 +211,9 @@ async function patch_task(id,patch){
     }
 }
 
-async function get_tasks(){
+async function get_tasks(query_string){
     try{
-        const response = await fetch("/api/tasks")
+        const response = await fetch("/api/tasks" + query_string)
         if (response.ok){
             const json = await response.json();
             tasks = json;
@@ -299,6 +312,8 @@ function build_task_element(task){
 }
 
 check_session();
-get_tasks();
+const params = new URLSearchParams(window.location.search);
+document.getElementById("tag-header").innerText = params.get('tag');
+get_tasks(window.location.search);
     </script>
 </html>

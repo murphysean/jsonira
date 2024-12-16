@@ -47,36 +47,71 @@ impl TaskDb {
         circles: Option<Vec<String>>,
         tags: Option<Vec<String>>,
     ) -> Result<Vec<Task>> {
+        let Some(circles) = circles else {
+            return Ok(vec![]);
+        };
+        if circles.is_empty() {
+            return Ok(vec![]);
+        }
+        let Some(tags) = tags else {
+            return Ok(vec![]);
+        };
+        if tags.is_empty() {
+            return Ok(vec![]);
+        }
+        let circles_string = circles
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!(":circle{}", i).to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        println!("TAKEALOOK CIRCLES STRING {}", circles_string);
+        let tags_string = tags
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!(":tag{}", i).to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        println!("TAKEALOOK TAGS STRING {}", tags_string);
         let connection = self.connection.lock().await;
-        static QUERY: &str = r#"
+        let query = format!(
+            r#"
         SELECT
-            id,
-            json_extract(obj, '$.title') title,
-            json_extract(obj, '$.circle') circle,
-            json_extract(obj, '$.reporter') reporter,
-            json_extract(obj, '$.assignee') assignee,
-            json_extract(obj, '$.priority') priority,
-            json_extract(obj, '$.estimate') estimate,
-            json_extract(obj, '$.points') points,
-            json_extract(obj, '$.state') state,
-            json_extract(obj, '$.tags') tags,
-            json_extract(obj, '$.created') created,
-            json_extract(obj, '$.updated') updated,
-            json_extract(obj, '$.due') due
+            tasks.id,
+            json_extract(tasks.obj, '$.title') title,
+            json_extract(tasks.obj, '$.circle') circle,
+            json_extract(tasks.obj, '$.reporter') reporter,
+            json_extract(tasks.obj, '$.assignee') assignee,
+            json_extract(tasks.obj, '$.priority') priority,
+            json_extract(tasks.obj, '$.estimate') estimate,
+            json_extract(tasks.obj, '$.points') points,
+            json_extract(tasks.obj, '$.state') state,
+            json_extract(tasks.obj, '$.tags') tags,
+            json_extract(tasks.obj, '$.created') created,
+            json_extract(tasks.obj, '$.updated') updated,
+            json_extract(tasks.obj, '$.due') due
         FROM
-            tasks
+            tasks,
+            json_each(json_extract(tasks.obj, '$.tags')) tags
         WHERE
-            circle = :circle
+            circle IN ({})
+        AND
+            tags.value IN ({})
         ORDER BY
             created
-        LIMIT :limit OFFSET :offset;"#;
-        //let dynamic_query = format!(QUERY, )
+        LIMIT :limit OFFSET :offset;"#,
+            circles_string, tags_string
+        );
 
-        let mut statement = connection.prepare(QUERY)?;
-        statement.bind((":circle", "mrfy-family"))?;
-        //statement.bind((":circle", circles));
-        statement.bind((":limit", 100))?;
-        statement.bind((":offset", 0))?;
+        let mut statement = connection.prepare(query)?;
+        for (i, s) in circles.iter().enumerate() {
+            statement.bind((format!(":circle{}", i).as_str(), s.as_str()))?;
+        }
+        for (i, s) in tags.iter().enumerate() {
+            statement.bind((format!(":tag{}", i).as_str(), s.as_str()))?;
+        }
+        statement.bind((":limit", limit))?;
+        statement.bind((":offset", offset))?;
 
         let mut tasks: Vec<Task> = Vec::new();
         while let Ok(sqlite::State::Row) = statement.next() {

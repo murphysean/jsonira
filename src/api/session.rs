@@ -64,18 +64,24 @@ pub async fn handle_post_login(
     let password = form.get("password").ok_or(StatusCode::BAD_REQUEST)?;
     let mut headers = HeaderMap::new();
     headers.insert("Location", "/index.html".parse().unwrap());
-    if let Ok(user) = state.user_db.authenticate_user(email, password).await {
-        let token = user.create_token(&state.token_secret).unwrap();
-        headers.insert(
-            "Set-Cookie",
-            format!(
-                "session={}; path=/; HttpOnly; SameSite=Strict; Secure",
-                token
-            )
-            .parse()
-            .unwrap(),
-        );
-    };
+    match state.user_db.authenticate_user(email, password).await {
+        Ok(user) => {
+            let token = user.create_token(&state.token_secret).unwrap();
+            headers.insert(
+                "Set-Cookie",
+                format!(
+                    "session={}; path=/; HttpOnly; SameSite=Strict; Secure",
+                    token
+                )
+                .parse()
+                .unwrap(),
+            );
+        }
+        Err(e) => {
+            println!("Failed login: {}",e);
+            Err(StatusCode::BAD_REQUEST)?;
+        }
+    }
 
     Ok((headers, StatusCode::SEE_OTHER))
 }

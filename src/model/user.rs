@@ -1,6 +1,7 @@
+use eyre::Context;
 use jsonwebtokens::{encode, Algorithm};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{from_value, json, Value};
 use std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
 use thiserror::Error;
 use uuid::Uuid;
@@ -103,6 +104,7 @@ impl From<NewUser> for User {
 impl TryFrom<Value> for User {
     type Error = eyre::Error;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
+        //Need to do a special for the user id, which a jwt token requires be a string
         let id: Option<i64> = value
             .get("sub")
             .and_then(|v| v.as_str())
@@ -115,26 +117,14 @@ impl TryFrom<Value> for User {
                 };
                 ret
             }));
-        Ok(Self {
-            id: id,
-            email: value
-                .get("email")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            email_verified: Some(false),
-            phone_number_verified: Some(false),
-            roles: None,
-            groups: None,
-            entitlements: None,
-            circles: None,
-            name: value.get("name").and_then(|v| v.as_str()).map(String::from),
-            profile: None,
-            picture: None,
-            website: None,
-            gender: None,
-            birthdate: None,
-            phone_number: None,
-        })
+
+        let result = from_value::<User>(value);
+        match result {
+            Ok(mut user) => {
+                user.id = id;
+                Ok(user)},
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
@@ -172,6 +162,7 @@ impl User {
             "sid": Uuid::new_v4(),
             "name": &self.name,
             "email": &self.email,
+            "circles": &self.circles,
         });
         Ok(encode(&header, &claims, &alg)?)
     }

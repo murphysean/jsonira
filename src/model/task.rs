@@ -310,6 +310,8 @@ pub struct Comment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Reaction {
     pub subject: Subject,
+    //You can react to anything else in the document using a json patch path here
+    pub path: Option<String>,
     pub reaction: String,
     pub created: Timestamp,
 }
@@ -326,24 +328,15 @@ pub enum ReviewState {
 pub struct Review {
     pub subject: Subject,
     pub review: ReviewState,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "grade")]
-pub enum Grade {
-    A,
-    B,
-    C,
-    D,
-    F,
+    pub rating: Option<Rating>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "rating")]
 pub enum Rating {
-    Grade(Grade),
     Pass,
     Fail,
+    Rating(f64),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
