@@ -3,150 +3,184 @@
     <head>
         <title>Mrfy.io Task {{task.title}}</title>
         <meta charset="UTF-8">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
         <style type="text/css">
+            section.attributes{
+                display: flex;
+                flex-direction: row;
+                flex-wrap: wrap;
+                border: 2px dotted gray;
+            }
+
+            section.attributes article{
+                background-color: lightgray;
+                margin: 2px;
+                flex: 1 1 auto;
+                align-content: center;
+            }
+
+            section.comments{
+                padding-left: 5px;
+            }
+
+            section.comments article{
+                margin: 5px;
+                padding-left: 5px;
+                border-left: 2px solid brown;
+                background-color: beige;
+            }
+
+            section.comments article footer{
+                font-size: x-small;
+                text-align: end;
+            }
         </style>
         <script>
             //Embed the task into the page
-            const task = JSON.parse('{{{task_json}}}');
-            const subject = JSON.parse('{{{subject_json}}}');
+            let task_id = {{task.id}};
+            const subject_id = {{subject.id}};
+            const subject_name = "{{subject.name}}";
+            const subject_email = "{{subject.email}}";
+
+
+//Sends a patch request with the given patch document as a patch
+async function patch_task(id,patch){
+    try{
+        let request = new Request("/api/tasks/" + id, {
+            method: "PATCH",
+            headers: { "content-type": "application/json-patch+json" },
+            body: JSON.stringify(patch),
+        });
+        const response = await fetch(request);
+        if (response.ok){
+            const json = await response.json();
+            task = json;
+        } else {
+            throw new Error(`Response status: ${response.status}`)
+        }
+    } catch (error) {
+        console.log(error);
+    }
+}
         </script>
     </head>
     <body>
-        <datalist id="circles">
-            <option value="public">Public</option>
-            <option value="mrfy-family">Murphy Family</option>
-        </datalist>
-        <datalist id="users">
-            <option data-id="1" data-email="murphysean84@gmail.com" data-name="Sean Murphy" value="Sean Murphy">Sean Murphy</option>
-            <option data-id="2" data-email="tucker.s.murphy@gmail.com" data-name="Tucker Murphy" value="Tucker Murphy">Tucker Murphy</option>
-            <option data-id="3" data-email="skye.s.murphy@gmail.com" data-name="Skye Murphy" value="Skye Murphy">Skye Murphy</option>
-            <option data-id="4" data-email="kianna.n.murphy@gmail.com" data-name="Kianna Murphy" value="Kianna Murphy">Kianna Murphy</option>
-        </datalist>
-        <datalist id="priorities">
-            <option data-priority="neutral" value="neutral">Neutral</option>
-            <option data-priority="trivial" value="trivial">Trivial</option>
-            <option data-priority="minor" value="minor">Minor</option>
-            <option data-priority="major" value="major">Major</option>
-            <option data-priority="critical" value="critical">Critical</option>
-            <option data-priority="blocker" value="blocker">Blocker</option>
-        </datalist>
-        <datalist id="states">
-            <option data-state="blocked" data-reason="waiting-on-other" value="Blocked (Waiting on Other)">Blocked (Waiting on Other)</option>
-            <option data-state="blocked" data-reason="needs-information" value="Blocked (Needs Information)">Blocked (Needs Information)</option>
-            <option data-state="blocked" data-reason="needs-planning" value="Blocked (Needs Planning)">Blocked (Needs Planning)</option>
-            <option data-state="blocked" data-reason="needs-materials" value="Blocked (Needs Materials)">Blocked (Needs Materials)</option>
-            <option data-state="blocked" data-reason="needs-tools" value="Blocked (Needs Tools)">Blocked (Needs Tools)</option>
-            <option data-state="blocked" data-reason="insufficient-budget" value="Blocked (Insufficient Budget)">Blocked (Insufficient Budget)</option>
-            <option data-state="blocked" data-reason="required-authorization" value="Blocked (Requires Authorization)">Blocked (Requires Authorization)</option>
-            <option data-state="todo" value="Todo">Todo</option>
-            <option data-state="in-progress" value="In Progress">In Progress</option>
-            <option data-state="in-review" value="In Review"></option>
-            <option data-state="complete" data-resolution="done" value="Complete (Done)">Complete (Done)</option>
-            <option data-state="complete" data-resolution="nothing-to-do" value="Complete (Nothing to do)">Complete (Nothing to do)</option>
-            <option data-state="complete" data-resolution="wont-do" value="Complete (Won't Do)">Complete (Won't Do)</option>
-            <option data-state="complete" data-resolution="cancelled" value="Complete (Cancelled)">Complete (Cancelled)</option>
-            <option data-state="complete" data-resolution="duplicate" value="Complete (Duplicate)">Complete (Duplicate)</option>
-            <option data-state="complete" data-resolution="closed-for-age" value="Complete (Closed for Age)">Complete (Closed for Age)</option>
-        </datalist>
-        <header><h1 id="task.title">Task {{task.id}}: {{task.title}}</h1></header>
+        <header><h1>TASK-{{task.id}}: {{task.title}}</h1></header>
         <nav>
-            <p>Home</p>
-            <p>Tasks</p>
+            <p><a href="/index.html"/>Home</a></p>
+            <p><a href="/board.html">Board</a></p>
         </nav>
-        <section id="details">
-            <div>
+        <section id="attributes" class="attributes">
+            <article>
                 <label for="title">Title:</label>
-                <input type="text" id="title" name="title" value="{{task.title}}"/>
-                <input type="button" value="Update"/>
-            </div>
-            <div>
+                <span id="title">{{task.title}}</span>
+            </article>
+            <article>
                 <label>Reporter:</label>
-                <span id="reporter" data-id="{{task.reporter.id}}" data-name="{{task.reporter.name}}" data-email="{{task.reporter.email}}">{{task.reporter.name}}</span>
-            </div>
-            <div>
+                <span id="reporter">{{task.reporter.name}}</span>
+            </article>
+            <article>
                 <label for="watchers">Watchers:</label>
-                <form id="watchers">
+                <ul id="watchers">
                 {{#each task.watchers}}
-                    <input type="checkbox" id="watcher-{{id}}" name="watcher-{{id}}" value="{{id}}" checked/>
-                    <label for="watcher-{{id}}">{{name}}</label>
+                    <li id="watcher-{{id}}" name="watcher">{{name}}</li>
                 {{/each}}
-                </form>
-                <label for="watcher">Add Watcher:</label>
-                <input type="text" id="watcher" name="watcher" list="users"/>
-                <input type="button" value="Add Watcher"/>
-            </div>
-            <div>
+                </ul>
+            </article>
+            <article>
                 <label for="circle">Circle:</label>
-                <input type="text" id="circle" name="circle" list="circles" value="{{task.circle}}">
-            </div>
-            <div>
+                <span id="circle" name="circle">{{task.circle}}</span>
+            </article>
+            <article>
                 <label for="assignee">Assignee:</label>
-                <input type="text" id="assignee" name="assignee" list="users" value="{{task.assignee.name}}"/>
-                <input type="button" value="Update"/>
-            </div>
-            <div>
+                <span id="assignee" name="assignee">{{task.assignee.name}}</span>
+            </article>
+            <article>
                 <label for="priority">Priority:</label>
-                <input type="text" id="priority" name="priority" list="priorities" value="{{task.priority}}"/>
-                <input type="button" value="Update"/>
-            </div>
-            <div>
+                <span id="priority" name="priority">{{task.priority}}</span>
+            </article>
+            <article>
                 <label for="estimate">Estimate (8601 time span... P1y2m3dT4h5m6s):</label>
-                <input type="text" id="estimate" name="estimate" value="{{task.estimate}}"/>
-                <input type="button" value="Update"/>
-            </div>
-            <div>
+                <span id="estimate" name="estimate">{{task.estimate}}</span>
+            </article>
+            <article>
                 <label for="points">Points:</label>
-                <input type="text" id="points" name="points" value="{{task.points}}"/>
-                <input type="button" value="Update"/>
-            </div>
-            <div>
+                <span id="points" name="points">{{task.points}}</span>
+            </article>
+            <article>
                 <label for="state">State:</label>
-                <input type="text" id="state" name="state" list="states" value="{{task.state.state}}"/>
-                <input type="button" value="Update"/>
-            </div>
-            <div>
+                <span id="state" name="state">{{task.state.state}}</span>
+            </article>
+            <article>
                 <label for="tags">Tags:</label>
-                <form id="tags">
+                <ul id="tags">
                 {{#each task.tags}}
-                    <input type="checkbox" id="tag-{{this}}" name="tag-{{this}}" value="{{this}}" checked/>
-                    <label for="tag-{{this}}">{{this}}</label>
+                    <li id="tag-{{this}}" name="tag">{{this}}</li>
                 {{/each}}
                 </form>
-                <label for="tag">Add Tag:</label>
-                <input type="text" id="tag" name="tag"/>
-                <input type="button" value="Add Tag"/>
-            </div>
-            <div>Created: {{task.created}}</div>
-            <div>Updated: {{task.updated}}</div>
-            <div>
+            </article>
+            <article>
+                <time>Created: {{task.created}}</time>
+            </article>
+            <article>
+                <time>Updated: {{task.updated}}</time>
+            </article>
+            <article>
+            <article>
                 <label for="due">Due:</label>
-                <input type="date" id="due" name="due" value="{{task.due}}"/>
-                <input type="button" value="Update"/>
-            </div>
+                <time id="due" name="due" value="{{task.due}}"/>
+            </article>
         </section>
-        <section id="description">
-            <article id="description" contenteditable="true" oninput="alert('Description Changed!')">{{task.description}}</article>
-            <input type="button" value="Update">
-        </section>
-        <section id="comments">
-            {{#each task.comments}}<article id="">
-                {{#if comment}}<div>{{comment}}</div>{{/if}}
-                <footer>By {{subject.name}} on {{created}}</footer>
-            </article>{{/each}}
+        <script>
+            function add_comment(){
+                const now = new Date;
+                const comment_input = document.getElementById("comment-input");
+                const comment = comment_input.value;
+                patch_task(task_id, [
+                    {"op": "add", "path": "/comments/-", "value": {
+                            subject: {
+                                id: subject_id,
+                                name: subject_name,
+                                email: subject_email,
+                            },
+                            comment: comment,
+                            content_type: "text/plain",
+                            created: now.toISOString(),
+                        },
+                    }
+                ]);
+                comment_input.value = "";
+                //TODO Add a section for this comment
+                const comments_section = document.getElementById("comments");
+                let ce = document.createElement("article");
+                ce.name = "comment"
+                ce.className = "comment"
+                ce.innerHTML = "<div>"+comment+"</div><footer>By "+subject_name+" right now</footer>";
+                comments_section.appendChild(ce);
+            }
+        </script>
+        <section>
+            <header><h3>Comments</h3></header>
+            <section id="comments" class="comments">
+                {{#each task.comments}}<article name="comment" class="comment">
+                    {{#if comment}}<div>{{comment}}</div>{{/if}}
+                    <footer>By {{subject.name}} on {{created}}</footer>
+                </article>{{/each}}{{#if subject.id}}
+            </section>
             <input id="comment-input" type="text">
-            <input type="button" value="Add Comment"/>
+            <input type="button" value="Add Comment" onclick="add_comment()"/>{{/if}}
         </section>
             <p>Reactions: {{task.reactions}}</p>
             <p>Reviews: {{task.reviews}}</p>
             <p>History: {{task.history}}</p>
         <section id="history">
-            {{#each task.history}}<article id="hitory-{{@index}}">
+            {{#each task.history}}<article id="history-{{@index}}">
                 <div>Updates by {{subject.name}} on {{patched}}</div>
             </article>{{/each}}
-            <input id="comment-input" type="text">
-            <input type="button" value="Add Comment"/>
         </section>
         <footer>{{task.history}}</footer>
     </body>
-    <script src="task.js"></script>
 </html>

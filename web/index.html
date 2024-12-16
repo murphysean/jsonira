@@ -1,20 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <title>Mrfy.io Chat</title>
+        <title>Mrfy.io</title>
         <meta charset="UTF-8">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
         <style type="text/css">
             div#login{
-                display:none;
-            }
-            div#chat{
                 display:none;
             }
         </style>
         <script src="index.js"></script>
     </head>
     <body onload="on_load()">
-        <h1>Mrfy.io chat</h1>
+        <h1>Welcome to Mrfy.io</h1>
         <div id="login" display="none">
             <form action="/login" method="post">
             <label for="username">username:</label><br>
@@ -27,14 +28,11 @@
             </label>
             </form>
         </div>
-
-        <div id="chat-div" display = "none">
-            <p id="chat-status"><em>Connecting...</em></p>
-            <div id = "chat">
-
-            </div>
-            <input type="text" id="text" />
-            <button type="button" id="send">Send</button>
-        </div>
+        <nav>
+            <p><a href="/board.html">Sprint Board</a></p>
+        </nav>
+        <section>
+            <article>Once you've logged in I'd encourage you to check out my <a href="/board.html">task</a> system. It's a family sprint system.</article>
+        </section>
     </body>
 </html>

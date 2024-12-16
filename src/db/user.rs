@@ -215,11 +215,10 @@ mod tests {
         password_hash::{rand_core::OsRng, SaltString},
         Argon2, PasswordHash, PasswordVerifier,
     };
-    
 
     #[test]
     fn simple_argon2() {
-        let password = String::from("101110");
+        let password = String::from("9-cheetahs-hunting");
         let salt = SaltString::generate(OsRng);
         //let salt = String::from("saltsaltsalt");
         use argon2::PasswordHasher;
@@ -234,5 +233,15 @@ mod tests {
         let pw_hash = PasswordHash::new(hash.as_str()).unwrap();
         let algs: &[&dyn PasswordVerifier] = &[&Argon2::default()];
         pw_hash.verify_password(algs, password).unwrap();
+    }
+
+    #[test]
+    fn test_against_password() {
+        let password = String::from("9-cheetahs-hunting");
+        let hash = String::from("$argon2id$v=19$m=19456,t=2,p=1$izyzjiCywrLhHs5y3sJFXA$bZyhubk51HLYMdDKWsfNptu+cOUXezc7p9w4vRvrXyM");
+
+        let pw_hash = PasswordHash::new(hash.as_str()).unwrap();
+        let algs: &[&dyn PasswordVerifier] = &[&Argon2::default()];
+        assert!(pw_hash.verify_password(algs, password).is_ok());
     }
 }

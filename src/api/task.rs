@@ -1,4 +1,3 @@
-
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, HeaderValue, StatusCode},
@@ -29,8 +28,10 @@ pub async fn tasks_get(
             String::from("Authenticated Subject is not a user"),
         ));
     };
+    //TODO Get tags off request
+    let tags: Option<Vec<String>> = Some(vec![]);
 
-    match state.task_db.read_tasks().await {
+    match state.task_db.read_tasks(100, 0, user.circles, tags).await {
         Ok(users) => Ok(Json(users)),
         Err(error) => {
             error!("{:?}", error);

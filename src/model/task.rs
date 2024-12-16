@@ -384,7 +384,7 @@ mod tests {
         println!("{}", to_string(&todo_state).unwrap());
         println!("{}", to_string(&blocked_state).unwrap());
         println!("{}", to_string(&complete_state).unwrap());
-        let str = "todo";
+        let str = "{\"state\":\"todo\"}";
         let json_todo: TaskState = from_str(str).unwrap();
         let TaskState::Todo = json_todo else {
             return assert!(false);

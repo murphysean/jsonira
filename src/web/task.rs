@@ -1,4 +1,3 @@
-
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -29,10 +28,9 @@ pub async fn view_task(
     State(state): State<AppState>,
     auth_ctx: AuthContext,
     Path(id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode,String)> {
+) -> Result<impl IntoResponse, (StatusCode, String)> {
     let key = "task";
     let engine = state.engine;
-
 
     match state.task_db.read_task(id).await {
         Ok(task) => {
@@ -43,7 +41,7 @@ pub async fn view_task(
                 task_json: to_string(&task).unwrap(),
             };
             Ok(RenderHtml(key, engine, data))
-        },
+        }
         Err(error) => Err((StatusCode::INTERNAL_SERVER_ERROR, error.to_string())),
     }
 }

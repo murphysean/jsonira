@@ -1,4 +1,3 @@
-
 use axum::{
     async_trait,
     extract::{FromRef, FromRequestParts, Host, OriginalUri, State},
@@ -33,6 +32,7 @@ pub enum Subject {
 
 impl PartialEq for Subject {
     fn eq(&self, other: &Self) -> bool {
+        println!("{:?} =?= {:?}", self, other);
         match &self {
             Subject::None => false,
             Subject::UserId(id) => match &other {
@@ -307,10 +307,14 @@ mod tests {
         }"#,
         )
         .unwrap();
-        println!("Simple Email: {:?}", usub);
+        println!("Subject: {:?}", usub);
+        assert_eq!(
+            Subject::UserEmail(String::from("murphysean84@gmail.com")),
+            usub,
+        );
         assert_eq!(
             usub,
-            Subject::UserEmail(String::from("murphysean84@gmail.com"))
+            Subject::UserEmail(String::from("murphysean84@gmail.com")),
         );
     }
 

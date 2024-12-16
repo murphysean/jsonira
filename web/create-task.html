@@ -41,7 +41,7 @@
             <option data-state="in-review" value="In Review"></option>
             <option data-state="complete" data-resolution="done" value="Complete (Done)">Complete (Done)</option>
             <option data-state="complete" data-resolution="nothing-to-do" value="Complete (Nothing to do)">Complete (Nothing to do)</option>
-            <option data-state="complete" data-resolution="wont-do" value="Complete (Won't Do)">Complete (Won't Do)</option>
+            <option data-state="complete" data-resolution="wont-do" value="Complete (Wont Do)">Complete (Won't Do)</option>
             <option data-state="complete" data-resolution="cancelled" value="Complete (Cancelled)">Complete (Cancelled)</option>
             <option data-state="complete" data-resolution="duplicate" value="Complete (Duplicate)">Complete (Duplicate)</option>
             <option data-state="complete" data-resolution="closed-for-age" value="Complete (Closed for Age)">Complete (Closed for Age)</option>
@@ -68,6 +68,7 @@
             <div>
                 <label for="circle">Circle:</label>
                 <input type="text" id="circle" name="circle" list="circles" value="">
+                <input id="update-circle-button" class="update-button" type="button" value="Update" onclick="update_circle_from_input()"/>
             </div>
             <div>
                 <label for="assignee">Assignee:</label>

@@ -292,7 +292,7 @@ function add_watcher_from_input(){
 
 function add_watcher(dataset){
     const eid = watchers.children.length+1;
-    let input = document.createElement("input")
+    let input = document.createElement("input");
     input.type = "checkbox";
     input.id = "watcher-" + eid;
     input.name = "watcher";
@@ -310,6 +310,18 @@ function add_watcher(dataset){
     
     watchers_form.appendChild(input);
     watchers_form.appendChild(label);
+}
+
+function update_circle_from_input(){
+    if(circle_input.value){
+        //If I have an active task on the page then send it up as an individual patch
+        if(current_task){
+            current_task.circle = circle_input.value;
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/circle", "value": circle_input.value}
+            ]);
+        }
+    }
 }
 
 function update_assignee_from_input(){
@@ -392,6 +404,14 @@ function update_state_from_input(){
 
 function add_tag_from_input(){
     let v = add_tag_input.value;
+    //If I have an active task on the page then append this tag as a patch
+    if(current_task){
+        current_task.tags.push(v);
+        patch_task(current_task.id, [
+            {"op": "add", "path": "/tags/-", "value": v}
+        ]);
+
+    }
     add_tag(v);
     add_tag_input.value = "";
 }

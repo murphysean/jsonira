@@ -2,14 +2,14 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 
 use color_eyre::Result;
 use eyre::{eyre, Context};
-use jiff::Timestamp;
-use serde_json::{from_str, to_string};
+use jiff::{Span, Timestamp};
+use serde_json::{from_str, from_value, to_string, Value};
 use sqlite::Statement;
 use tokio::sync::Mutex;
 
 use crate::model::{
     subject::Subject,
-    task::{Task, TaskState},
+    task::{Task, TaskPriority, TaskState},
 };
 
 #[derive(Clone)]
@@ -40,19 +40,29 @@ impl TaskDb {
     /// Will get an array of tasks
     /// Only returns the id, title, assignee, state, created, updated, due,
     #[tracing::instrument(level = "info")]
-    pub async fn read_tasks(&self) -> Result<Vec<Task>> {
+    pub async fn read_tasks(
+        &self,
+        limit: i64,
+        offset: i64,
+        circles: Option<Vec<String>>,
+        tags: Option<Vec<String>>,
+    ) -> Result<Vec<Task>> {
         let connection = self.connection.lock().await;
         static QUERY: &str = r#"
         SELECT
             id,
             json_extract(obj, '$.title') title,
-            json_extract(obj, '$.assignee') assignee,
+            json_extract(obj, '$.circle') circle,
             json_extract(obj, '$.reporter') reporter,
+            json_extract(obj, '$.assignee') assignee,
+            json_extract(obj, '$.priority') priority,
+            json_extract(obj, '$.estimate') estimate,
+            json_extract(obj, '$.points') points,
             json_extract(obj, '$.state') state,
+            json_extract(obj, '$.tags') tags,
             json_extract(obj, '$.created') created,
             json_extract(obj, '$.updated') updated,
-            json_extract(obj, '$.due') due,
-            json_extract(obj, '$.circle') circle
+            json_extract(obj, '$.due') due
         FROM
             tasks
         WHERE
@@ -60,9 +70,11 @@ impl TaskDb {
         ORDER BY
             created
         LIMIT :limit OFFSET :offset;"#;
+        //let dynamic_query = format!(QUERY, )
 
         let mut statement = connection.prepare(QUERY)?;
         statement.bind((":circle", "mrfy-family"))?;
+        //statement.bind((":circle", circles));
         statement.bind((":limit", 100))?;
         statement.bind((":offset", 0))?;
 
@@ -71,8 +83,22 @@ impl TaskDb {
             let mut task = Task::default();
             task.id = statement.read("id")?;
             task.title = statement.read("title")?;
-            task.assignee = Self::read_subject(&statement, "assignee")?;
+            task.circle = statement.read("circle")?;
             task.reporter = Self::read_subject(&statement, "reporter")?;
+            task.assignee = Self::read_subject(&statement, "assignee")?;
+            task.priority = Self::read_json_value(&statement, "priority")
+                .wrap_err("unexpected value in priority column")
+                .and_then(|ov| match ov {
+                    Some(v) => Ok(Some(from_value(v)?)),
+                    None => Ok(None),
+                })?;
+            task.estimate = Self::read_json_value(&statement, "estimate")
+                .wrap_err("unexpected value in estimate column")
+                .and_then(|ov| match ov {
+                    Some(v) => Ok(Some(from_value(v)?)),
+                    None => Ok(None),
+                })?;
+            task.points = statement.read("points")?;
             task.state = statement
                 .read::<Option<String>, &str>("state")
                 .wrap_err("unexpected value in state column")
@@ -107,13 +133,38 @@ impl TaskDb {
         Ok(tasks)
     }
 
+    //I need a function that will read a valid json value from the column
+    //or convert string literal -> json string
+    //fn read_json_value
+    fn read_json_value(statement: &Statement, index: &str) -> Result<Option<Value>> {
+        let result = statement.read::<Option<String>, &str>(index);
+        match result {
+            Ok(os) => {
+                match os {
+                    Some(s) => {
+                        //TODO Try to parse as json
+                        let result = from_str::<Value>(&s);
+                        match result {
+                            Ok(v) => Ok(Some(v)),
+                            Err(_) => Ok(Some(Value::String(s))),
+                        }
+                    }
+                    None => Ok(None),
+                }
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
     fn read_subject(statement: &Statement, index: &str) -> Result<Option<Subject>> {
-        //Eary return if it is just an integer user id
-        if let Some(val) = statement
-            .read::<i64, &str>(index)
-            .ok()
-            .and_then(|v| Some(Subject::UserId(v)))
-        {
+        //Eary return if it is just an integer user id, this eagerly returns a 0 for non-integers
+        if let Some(val) = statement.read::<i64, &str>(index).ok().and_then(|v| {
+            if v == 0 {
+                return None;
+            } else {
+                return Some(Subject::UserId(v));
+            }
+        }) {
             return Ok(Some(val));
         }
         //Now see if it's a email subject or a user obj
@@ -125,10 +176,6 @@ impl TaskDb {
             //If it's a none, then the column is empty, return none
             return Ok(None);
         }
-    }
-
-    fn read_timestamp(statement: &Statement, index: &str) -> Option<Timestamp> {
-        None
     }
 
     /// Creates a new task from a given task

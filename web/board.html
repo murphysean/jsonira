@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Mrfy.io Task Creator</title>
+        <meta charset="UTF-8">
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
+        <style>
+            .board, .board-header{
+                display: flex;
+            }
+            .state-header{
+                display: flex;
+                flex-direction: column;
+                flex: 1;
+                margin: 5px;
+                min-width: 200px;
+            }
+            .state{
+                display: flex;
+                flex-direction: column;
+                flex: 1;
+                margin: 5px;
+                padding-top: 25px;
+                padding-bottom: 25px;
+                min-width: 200px;
+            }
+            .task{
+                display: flex;
+                flex-direction: column;
+                margin: 5px;
+                max-width: 200px;
+            }
+            [data-priority="neutral"]{background-color: beige;}
+            [data-priority="trivial"]{background-color: darkseagreen;}
+            [data-priority="minor"]{background-color: palegreen;}
+            [data-priority="major"]{background-color: mistyrose;}
+            [data-priority="critical"]{background-color: lightsalmon;}
+            [data-priority="blocker"]{background-color: lightcoral;}
+            .task > header{
+                text-overflow: ellipsis;
+                overflow: hidden;
+                white-space: nowrap;
+            }
+            .task > footer{
+                align-self: flex-end;
+                font-size: smaller;
+            }
+            .state-header{
+                width: 160px;
+                display: inline-block;
+            }
+            .tag-header{
+                width: 750px;
+                text-align: center;
+            }
+            .pulse {
+                animation: pulse 3s infinite;
+            }
+
+            @keyframes pulse {
+                0% {
+                    font-variation-settings: 'wght' 100;
+                }
+                50% {
+                    font-variation-settings: 'wght' 700;
+                }
+                100% {
+                    font-variation-settings: 'wght' 100;
+                }
+            }
+        </style>
+        <script>
+            let tasks = [];
+            let authenticated_user = null;
+            async function check_session() {
+                //TODO Check if I am currently authenticated
+                try{
+                    const response = await fetch("/session");
+                    if (response.ok){
+                        const json = await response.json();
+                        console.log(json);
+                        authenticated_user = json;
+                    } else {
+                        throw new Error(`Response status: ${response.status}`);
+                    }
+                    
+                } catch (error) {
+                    console.log(error);
+                }
+            }
+            function get_task_by_id(task_id){
+                for (t of tasks){
+                    if(t.id == task_id){
+                        return t;
+                    }
+                }
+                return null;
+            }
+            function dragstart(e){
+                e.dataTransfer.setData("text/plain", e.target.innerText);
+                e.dataTransfer.setData("text/html", e.target.outerHTML);
+                e.dataTransfer.setData("document/id", e.target.id);
+                e.dataTransfer.dropEffect = "move";
+            }
+            function dragover(e){
+                if(e.target.name && e.target.name != "state"){
+                    return;
+                }
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+            }
+            function drop(e){
+                console.log("DROP", e.target.name);
+                if(e.target.name && e.target.name != "state"){
+                    return;
+                }
+                e.preventDefault();
+                const data = e.dataTransfer.getData("document/id");
+                let task_element = document.getElementById(data);
+                let task_id = task_element.dataset.task_id;
+                let task = get_task_by_id(task_id);
+                e.target.appendChild(task_element);
+                //Change the task state
+                let new_state = {
+                    state: e.target.dataset.state,
+                    resolution: e.target.dataset.resolution,
+                    reason: e.target.dataset.reason,
+                };
+                console.log("I'm about to do it", task, new_state);
+                patch_task(task_id, [
+                    {"op": "replace", "path": "/state", "value": new_state}
+                ]);
+            }
+            function dragend(e){
+                //TODO Can check if the op was successful
+            }
+        </script>
+    </head>
+    <body>
+        <!-- Begin Templates -->
+         <template id="task-template">
+            <article name="task">
+                <header>
+                    <a name="task-link"></a>
+                    <span name="task-title"></span>
+                </header>
+                <!--<article name="task-points"></article>
+                <article name="task-estimate"></article>-->
+                <footer name="task-assignee"></footer>
+            </article>
+         </template>
+        <!-- End Templates -->
+        <h1 class="tag-header">Week50</h1>
+        <header id="board-header" class="board-header">
+            <h2 class="state-header">Blocked</h2>
+            <h2 class="state-header">Todo</h2>
+            <h2 class="state-header">In Progress</h2>
+            <h2 class="state-header">In Review</h2>
+            <h2 class="state-header">Complete (Done)</h2>
+        </header>
+        <section id="board" class="board">
+            <section id="blocked" name="state" class="state" data-state="blocked" data-reason="waiting-on-other" ondragover="dragover(event)" ondrop="drop(event)">
+            </section>
+            <section id="todo" name="state" class="state" data-state="todo" ondragover="dragover(event)" ondrop="drop(event)">
+            </section>
+            <section id="in-progress" name="state" class="state" data-state="in-progress" ondragover="dragover(event)" ondrop="drop(event)">
+            </section>
+            <section id="in-review" name="state" class="state" data-state="in-review" ondragover="dragover(event)" ondrop="drop(event)">
+            </section>
+            <section id="complete" name="state" class="state" data-state="complete" data-resolution="done" ondragover="dragover(event)" ondrop="drop(event)">
+            </section>
+        </section>
+        <section id="scorecard" class="scorecard">
+        </section>
+    </body>
+    <script>
+//Sends a patch request with the given patch document as a patch
+async function patch_task(id,patch){
+    try{
+        let request = new Request("/api/tasks/" + id, {
+            method: "PATCH",
+            headers: { "content-type": "application/json-patch+json" },
+            body: JSON.stringify(patch),
+        });
+        const response = await fetch(request);
+        if (response.ok){
+            const json = await response.json();
+            console.log(json);
+            current_task = json;
+        } else {
+            throw new Error(`Response status: ${response.status}`)
+        }
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+async function get_tasks(){
+    try{
+        const response = await fetch("/api/tasks")
+        if (response.ok){
+            const json = await response.json();
+            tasks = json;
+            scores = {};
+            for (t of tasks){
+                if(t.assignee){
+                if(scores[t.assignee.name]){
+                    scores[t.assignee.name].total += Number(t.points);
+                    if(t.state && t.state.state && t.state.state == "complete"){
+                        scores[t.assignee.name].complete += Number(t.points);
+                    }
+                }else{
+                    scores[t.assignee.name] = {complete:0,total:0};
+                    scores[t.assignee.name].total = Number(t.points);
+                    if(t.state && t.state.state && t.state.state == "complete"){
+                        scores[t.assignee.name].complete = Number(t.points);
+                    }
+                }}
+                let e = build_task_element(t);
+                document.getElementById(t.state.state).appendChild(e);
+            }
+            build_score_articles(scores);
+        } else {
+            throw new Error(`Response status: ${response.status}`);
+        }
+    } catch (error){
+        console.log(error);
+    }
+}
+
+function build_score_articles(scores){
+    for(let [key,value] of Object.entries(scores)){
+        let article = document.createElement("article");
+        article.innerHTML = "<span>"+key+"</span>:<span>Completed "+value.complete+"/"+value.total+"</span>";
+        document.getElementById("scorecard").appendChild(article);
+    }
+}
+
+function build_task_element_new(task){
+    let template = document.getElementById("task-template");
+
+    return template;
+}
+
+function build_task_element(task){
+    let article = document.createElement("article");
+    article.id = "task-" + task.id;
+    article.name = "task";
+    article.dataset.task_id=task.id;
+    article.dataset.priority=task.priority;
+    article.className="task";
+    article.draggable="true";
+
+    //The task title as the task header
+    let header = document.createElement("header");
+    let a = document.createElement("a");
+    a.href = "/task/" + task.id;
+    a.innerText="TASK-" + task.id + ": ";
+    header.appendChild(a);
+    let span = document.createElement("span");
+    span.innerText = task.title;
+    header.appendChild(span);
+    article.appendChild(header);
+
+    //let figure = document.createElement("figure");
+    //Put a footer for the assignee
+    let footer = document.createElement("footer");
+    if(task.assignee){
+        footer.textContent = task.assignee.name
+    }else{
+        let assign_self = document.createElement("input");
+        assign_self.id = "task-"+task.id+"-assign-self-button";
+        assign_self.name = "task-assign-self-button";
+        assign_self.type = "button";
+        assign_self.value = "Assign Self";
+        assign_self.addEventListener("click", function(e){
+            patch_task(task.id, [
+                {"op": "replace", "path": "/assignee", "value": {
+                    id: authenticated_user.id,
+                    email: authenticated_user.email,
+                    name: authenticated_user.name,
+                }}
+            ]);
+            let te = document.getElementById("task-"+task.id);
+            te.replaceChildren();
+            te.innerHTML = authenticated_user.name;
+        });
+        footer.appendChild(assign_self);
+    }
+    article.appendChild(footer);
+    //let aside = document.createElement("aside");
+    //let p = document.createElement("p");
+
+    article.addEventListener("dragstart", dragstart);
+    return article;
+}
+
+check_session();
+get_tasks();
+    </script>
+</html>
