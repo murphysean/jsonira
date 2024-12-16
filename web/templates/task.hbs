@@ -8,6 +8,9 @@
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
         <style type="text/css">
+            body{
+                font-family: Roboto;
+            }
             section.attributes{
                 display: flex;
                 flex-direction: row;
@@ -100,8 +103,15 @@ async function patch_task(id,patch){
             </article>
             <article>
                 <label for="priority">Priority:</label>
-                <span id="priority" name="priority">{{task.priority}}</span>
+                <span id="priority" name="priority" data-priority="{{task.priority}}">{{task.priority}}</span>
+                <span id="priority-icon-neutral" class="material-symbols-outlined" style="display:none;">sentiment_neutral</span>
+                <span id="priority-icon-trivial" class="material-symbols-outlined" style="display:none;">low_priority</span>
+                <span id="priority-icon-minor" class="material-symbols-outlined" style="display:none;">priority</span>
+                <span id="priority-icon-major" class="material-symbols-outlined" style="display:none;">warning</span>
+                <span id="priority-icon-critical" class="material-symbols-outlined" style="display:none;">priority_high</span>
+                <span id="priority-icon-blocker" class="material-symbols-outlined" style="display:none;">error</span>
             </article>
+            <script>document.getElementById("priority-icon-{{task.priority}}").style="display:inline;"</script>
             <article>
                 <label for="estimate">Estimate (8601 time span... P1y2m3dT4h5m6s):</label>
                 <span id="estimate" name="estimate">{{task.estimate}}</span>
@@ -135,6 +145,42 @@ async function patch_task(id,patch){
             </article>
         </section>
         <script>
+            function count_reactions(){
+                const react_section = document.getElementById("reactions");
+                for (ra of react_section.children){
+                    const reaction = ra.dataset.reaction;
+                    const reaction_button = document.getElementById("react-"+reaction+"-button");
+                    if(!reaction_button.dataset.count){
+                        reaction_button.dataset.count = 0;
+                    }
+                    const count_span = reaction_button.querySelector(".count");
+                    reaction_button.dataset.count = Number(reaction_button.dataset.count) + 1;
+                    count_span.innerHTML = reaction_button.dataset.count;
+                }
+            }
+            function react(reaction){
+                const now = new Date;
+                //The button that was clicked needs to reflect this reaction has incremented
+                const reaction_button = document.getElementById("react-"+reaction+"-button");
+                if(!reaction_button.dataset.count){
+                    reaction_button.dataset.count = 0;
+                }
+                const count_span = reaction_button.querySelector(".count");
+                reaction_button.dataset.count = Number(reaction_button.dataset.count) + 1;
+                count_span.innerHTML = reaction_button.dataset.count;
+                patch_task(task_id, [
+                    {"op": "add", "path": "/reactions/-", "value": {
+                            subject: {
+                                id: subject_id,
+                                name: subject_name,
+                                email: subject_email,
+                            },
+                            reaction: reaction,
+                            created: now.toISOString(),
+                        },
+                    }
+                ]);
+            }
             function add_comment(){
                 const now = new Date;
                 const comment_input = document.getElementById("comment-input");
@@ -163,6 +209,28 @@ async function patch_task(id,patch){
             }
         </script>
         <section>
+            <header><h3>Reactions</h3></header>
+            <section id="reactions" class="reactions" style="display: none;">
+                {{#each task.reactions}}<article data-reaction="{{reaction}}"><span name="subject-name">{{subject.name}}</span><span class="material-symbols-outlined">{{reaction}}</span></article>{{/each}}
+            </section>
+            <button id="react-sentiment_very_satisfied-button" onclick="react('sentiment_very_satisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_very_satisfied</span></button>
+            <button id="react-sentiment_satisfied-button" onclick="react('sentiment_satisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_satisfied</span></button>
+            <button id="react-sentiment_neutral-button" onclick="react('sentiment_neutral')"><span class="count"></span><span class="material-symbols-outlined">sentiment_neutral</span></button>
+            <button id="react-sentiment_dissatisfied-button" onclick="react('sentiment_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_dissatisfied</span></button>
+            <button id="react-sentiment_very_dissatisfied-button" onclick="react('sentiment_very_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_very_dissatisfied</span></button>
+            <button id="react-sentiment_extremely_dissatisfied-button" onclick="react('sentiment_extremely_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_extremely_dissatisfied</span></button>
+            <button id="react-sentiment_sad-button" onclick="react('sentiment_sad')"><span class="count"></span><span class="material-symbols-outlined">sentiment_sad</span></button>
+            <button id="react-sentiment_calm-button" onclick="react('sentiment_calm')"><span class="count"></span><span class="material-symbols-outlined">sentiment_calm</span></button>
+            <button id="react-sentiment_excited-button" onclick="react('sentiment_excited')"><span class="count"></span><span class="material-symbols-outlined">sentiment_excited</span></button>
+            <button id="react-sentiment_stressed-button" onclick="react('sentiment_stressed')"><span class="count"></span><span class="material-symbols-outlined">sentiment_stressed</span></button>
+            <button id="react-sentiment_frustrated-button" onclick="react('sentiment_frustrated')"><span class="count"></span><span class="material-symbols-outlined">sentiment_frustrated</span></button>
+            <button id="react-sentiment_content-button" onclick="react('sentiment_content')"><span class="count"></span><span class="material-symbols-outlined">sentiment_content</span></button>
+            <button id="react-sentiment_worried-button" onclick="react('sentiment_worried')"><span class="count"></span><span class="material-symbols-outlined">sentiment_worried</span></button>
+            <button id="react-mood-button" onclick="react('mood')"><span class="count"></span><span class="material-symbols-outlined">mood</span></button>
+            <button id="react-mood_bad-button" onclick="react('mood_bad')"><span class="count"></span><span class="material-symbols-outlined">mood_bad</span></button>
+            <button id="react-sick-button" onclick="react('sick')"><span class="count"></span><span class="material-symbols-outlined">sick</span></button>
+        </section>
+        <section>
             <header><h3>Comments</h3></header>
             <section id="comments" class="comments">
                 {{#each task.comments}}<article name="comment" class="comment">
@@ -173,7 +241,6 @@ async function patch_task(id,patch){
             <input id="comment-input" type="text">
             <input type="button" value="Add Comment" onclick="add_comment()"/>{{/if}}
         </section>
-            <p>Reactions: {{task.reactions}}</p>
             <p>Reviews: {{task.reviews}}</p>
             <p>History: {{task.history}}</p>
         <section id="history">
@@ -182,5 +249,8 @@ async function patch_task(id,patch){
             </article>{{/each}}
         </section>
         <footer>{{task.history}}</footer>
+        <script>
+            count_reactions();
+        </script>
     </body>
 </html>
