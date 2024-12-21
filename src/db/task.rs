@@ -65,14 +65,12 @@ impl TaskDb {
             .map(|(i, _)| format!(":circle{}", i).to_string())
             .collect::<Vec<_>>()
             .join(",");
-        println!("TAKEALOOK CIRCLES STRING {}", circles_string);
         let tags_string = tags
             .iter()
             .enumerate()
             .map(|(i, _)| format!(":tag{}", i).to_string())
             .collect::<Vec<_>>()
             .join(",");
-        println!("TAKEALOOK TAGS STRING {}", tags_string);
         let connection = self.connection.lock().await;
         let query = format!(
             r#"
@@ -160,6 +158,15 @@ impl TaskDb {
                 .wrap_err("unexpected value in due column")
                 .and_then(|os| match os {
                     Some(s) => Ok(Some(s.as_str().parse()?)),
+                    None => Ok(None),
+                })?;
+            task.tags = Self::read_json_value(&statement,"tags")
+                .wrap_err("unexpected value in tags column")
+                .and_then(|ov| match ov{
+                    Some(v) => {
+                        let ret: Vec<String> = from_value(v)?;
+                        return Ok(Some(ret));
+                    },
                     None => Ok(None),
                 })?;
             tasks.push(task);

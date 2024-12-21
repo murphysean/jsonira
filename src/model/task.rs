@@ -206,6 +206,9 @@ impl Task {
     /// State changes can only be made by the assignee, and some depend on
     pub fn policy(&self, auth_context: &AuthContext, patch: &Patch) -> (Decision, &str) {
         let user_is_member = self.user_is_member(auth_context);
+        let user_is_assignee = self.user_is_assignee(auth_context);
+        let user_is_reporter = self.user_is_reporter(auth_context);
+        
         for p in &patch.0 {
             match p {
                 PatchOperation::Add(ao) => {
@@ -216,6 +219,7 @@ impl Task {
                         "/reviews/-",
                         "/tags/-",
                         "/watchers/-",
+                        "/todos/-",
                     ];
                     if !allowed_add_paths.contains(&ao.path.as_str()) {
                         return (
@@ -223,6 +227,8 @@ impl Task {
                             "Can only add to one of the tasks collections",
                         );
                     }
+                    //Non members can only add comments and reactions
+
                 }
                 PatchOperation::Replace(ro) => {
                     //Must be a watcher, assignee, or member of the circle
@@ -241,11 +247,21 @@ impl Task {
                         return (Decision::Deny, "Can only replace top level items now");
                     }
                     if ro.path.as_str() == "/state" {
-                        //Only the assignee can change state
-                        if self.assignee.is_some() {
-                            if &auth_context.subject != self.assignee.as_ref().unwrap() {
-                                return (Decision::Deny, "Must be assignee to change state");
-                            }
+                        //Only the assignee or reporter can change state
+                        if !user_is_assignee && !user_is_reporter {
+                            return (Decision::Deny, "Must be assignee or reporter to change state");
+                        }
+                    }
+                    let must_be_reporter_paths = vec![
+                        "/title",
+                        "/description",
+                        "/estimate",
+                        "/points",
+                        "/due",
+                    ];
+                    if must_be_reporter_paths.contains(&ro.path.as_str()){
+                        if !user_is_reporter{
+                            return (Decision::Deny, "Must be reporter to change core attributes");
                         }
                     }
                 }
@@ -259,6 +275,16 @@ impl Task {
     }
 
     fn user_is_member(&self, auth_context: &AuthContext) -> bool {
+        //Is the user the reporter?
+        if self.user_is_reporter(auth_context){
+            return true;
+        }
+
+        //Is the user assigned to the task?
+        if self.user_is_assignee(auth_context){
+            return true;
+        }
+
         //Is the user a watcher?
         if self
             .watchers
@@ -269,17 +295,14 @@ impl Task {
             return true;
         }
 
-        //Is the user assigned to the task?
-        if self
-            .assignee
-            .as_ref()
-            .map(|a| *a == auth_context.subject)
-            .unwrap_or(false)
-        {
+        //Is the user a member of the tasks circle?
+        if auth_context.subject.in_circle(&self.circle) {
             return true;
         }
+        false
+    }
 
-        //Is the user the reporter?
+    fn user_is_reporter(&self, auth_context: &AuthContext) -> bool {
         if self
             .reporter
             .as_ref()
@@ -288,12 +311,18 @@ impl Task {
         {
             return true;
         }
-
-        //Is the user a member of the tasks circle?
-        if auth_context.subject.in_circle(&self.circle) {
+        false
+    }
+    fn user_is_assignee(&self, auth_context: &AuthContext) -> bool {
+        if self
+            .assignee
+            .as_ref()
+            .map(|a| *a == auth_context.subject)
+            .unwrap_or(false)
+        {
             return true;
         }
-        return false;
+        false
     }
 }
 

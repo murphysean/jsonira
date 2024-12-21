@@ -101,7 +101,7 @@ async fn main() {
     // save the future for easy shutting down of our redirect server
     let shutdown_future = shutdown_signal(handle.clone());
 
-    tokio::spawn(redirect_http_to_https(shutdown_future));
+    //tokio::spawn(redirect_http_to_https(shutdown_future));
 
     let app = Router::new()
         .route("/api/users", get(users_get))
@@ -139,6 +139,17 @@ async fn main() {
     let config = RustlsConfig::from_pem_file("certs/fullchain.pem", "certs/privkey.pem")
         .await
         .unwrap();
+
+    let appc = app.clone();
+    let handlec = handle.clone();
+    tokio::spawn(async move{
+        let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+        axum_server::bind(addr)
+        .handle(handlec)
+        .serve(appc.into_make_service())
+        .await
+        .unwrap();
+    });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8443));
     axum_server::bind_rustls(addr, config)

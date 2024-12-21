@@ -1,7 +1,7 @@
 use axum::{
     async_trait,
     extract::{FromRef, FromRequestParts, Host, OriginalUri, State},
-    http::{request::Parts, StatusCode},
+    http::{request::Parts, uri::{Authority, Scheme}, StatusCode},
     response::IntoResponse,
 };
 use axum_extra::extract::CookieJar;
@@ -230,19 +230,15 @@ where
 {
     type Rejection = SubjectRejection;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        println!("FRP HERE 1");
         let result = Host::from_request_parts(parts, state).await;
         let Ok(Host(host)) = result else {
             return Err(SubjectRejection::FailedToResolveHost);
         };
-        println!("FRP HERE 2");
         let Ok(OriginalUri(uri)) = OriginalUri::from_request_parts(parts, state).await;
         let State(inner_state): State<AppState> =
             State::from_request_parts(parts, state).await.unwrap();
-        println!("FRP HERE 3");
         //Pull session cookie
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
-        println!("FRP HERE 4");
         if let Some(cookie) = jar.get("session") {
             let token = cookie.value().to_string();
             let alg = Algorithm::new_hmac(
@@ -253,10 +249,7 @@ where
                 .issuer("https://www.mrfy.io")
                 .audience(format!("https://{}", host))
                 .build()?;
-            println!("FRP HERE 5 sec: {}", inner_state.token_secret.as_str());
-            println!("FRP HERE 6 {:?}", verifier.verify(&token, &alg));
             let claims: Value = verifier.verify(&token, &alg)?;
-            println!("FRP HERE 7");
             let ctx = AuthContext {
                 subject: claims.clone().try_into()?,
                 client: Client {
@@ -266,12 +259,12 @@ where
                 action: Action {
                     scheme: uri
                         .scheme()
-                        .ok_or(SubjectRejection::FailedToParseUri)?
+                        .unwrap_or(&Scheme::HTTP)
                         .as_str()
                         .to_owned(),
                     authority: uri
                         .authority()
-                        .ok_or(SubjectRejection::FailedToParseUri)?
+                        .unwrap_or(&Authority::from_static("www.mrfy.io"))
                         .as_str()
                         .to_owned(),
                     path_and_query: uri
@@ -282,7 +275,6 @@ where
                     method: parts.method.as_str().to_owned(),
                 },
             };
-            println!("FRP HERE 7");
             return Ok(ctx);
         }
 

@@ -40,38 +40,226 @@
                 font-size: x-small;
                 text-align: end;
             }
+            .hide-form{
+                display: none;
+            }
         </style>
-        <script>
+        <script type="module" src="../modules/humandate.mjs"></script>
+        <script type="module" src="../modules/task.mjs"></script>
+        <script type="module">
+            import * as task from "../modules/task.mjs";
+            import humanDate from "../modules/humandate.mjs";
             //Embed the task into the page
-            let task_id = {{task.id}};
-            const subject_id = {{subject.id}};
-            const subject_name = "{{subject.name}}";
-            const subject_email = "{{subject.email}}";
+            const task_id = {{task.id}};
+            let mod_task = {};
+            mod_task.id = {{task.id}};
+            {{#if subject}}
+                const subject_id = {{subject.id}};
+                const subject_name = "{{subject.name}}";
+                const subject_email = "{{subject.email}}";
+                task.set_authenticated_user({
+                    id: {{subject.id}},
+                    name: "{{subject.name}}",
+                    email: "{{subject.email}}",
+                });
+            {{else}}
+                const subject_id = 0;
+                const subject_name = "";
+                const subject_email = "";
+            {{/if}}
+            {{#if task.assignee}}
+                const assignee_id = {{task.assignee.id}};
+                mod_task.assignee = {
+                    id: {{task.assignee.id}},
+                    name: "{{task.assignee.name}}",
+                    email: "{{task.assignee.email}}",
+                };
+            {{else}}
+                const assignee_id = 0;
+            {{/if}}
+            {{#if task.reporter}}
+                const reporter_id = {{task.reporter.id}};
+                mod_task.reporter = {
+                    id: {{task.reporter.id}},
+                    name: "{{task.reporter.name}}",
+                    email: "{{task.reporter.email}}",
+                };
+            {{else}}
+                const reporter_id = 0;
+            {{/if}}
+            task.set_current_task(mod_task);
 
+function on_load(){
+    unhide_forms();
+    count_reactions();
+    human_time_fields();
+}
+window.on_load = on_load;
 
-//Sends a patch request with the given patch document as a patch
-async function patch_task(id,patch){
-    try{
-        let request = new Request("/api/tasks/" + id, {
-            method: "PATCH",
-            headers: { "content-type": "application/json-patch+json" },
-            body: JSON.stringify(patch),
-        });
-        const response = await fetch(request);
-        if (response.ok){
-            const json = await response.json();
-            task = json;
-        } else {
-            throw new Error(`Response status: ${response.status}`)
-        }
-    } catch (error) {
-        console.log(error);
+function unhide_forms(){
+    //If there is a current authenticated user, allow comments and reactions
+    if(subject_id > 0){
+        document.getElementById("comments-form").className = "";
+        document.getElementById("reactions-form").className = "";
+        document.getElementById("assign-self-form").className = "";
+    }
+
+    //If the current user is the assignee, allow changing state
+    if(subject_id > 0 && subject_id == assignee_id){
+        document.getElementById("state-form").className = "";
+    }
+
+    //If the current user is the reporter, allow updates to estimate, points, assignee, state
+    if(subject_id > 0 && subject_id == reporter_id){
+        document.getElementById("state-form").className = "";
+        document.getElementById("estimate-form").className = "";
+        document.getElementById("points-form").className = "";
+        document.getElementById("assignee-form").className = "";
     }
 }
+
+function human_time_fields(){
+    const created_time = document.getElementById("created");
+    const updated_time = document.getElementById("updated");
+    const due_time = document.getElementById("due");
+
+    created_time.innerText = humanDate(created_time.dateTime);
+    updated_time.innerText = humanDate(updated_time.dateTime);
+    due_time.innerText = humanDate(due_time.dateTime);
+}
+
+function input_assignee(event){
+    if (event.inputType == 'insertReplacementText'){
+        const user = task.get_user_from_dataset(document.querySelector("#users option[value='" + event.target.value + "']"));
+        event.target.dataset.id = user.id;
+        event.target.dataset.name = user.name;
+        event.target.dataset.email = user.email;
+    }
+}
+window.input_assignee = input_assignee;
+window.update_assignee = task.update_assignee_from_input;
+
+function assign_self(){
+    document.getElementById("assign-self-form").className = "hide-form";
+    task.update_assignee_from_authenticated_user();
+}
+window.assign_self = assign_self;
+
+window.update_state = task.update_state_from_input;
+window.update_estimate = task.update_estimate_from_input;
+window.update_points = task.update_points_from_input;
+
+function count_reactions(){
+    const react_section = document.getElementById("reactions");
+    for (ra of react_section.children){
+        const reaction = ra.dataset.reaction;
+        const reaction_button = document.getElementById("react-"+reaction+"-button");
+        if(!reaction_button.dataset.count){
+            reaction_button.dataset.count = 0;
+        }
+        const count_span = reaction_button.querySelector(".count");
+        reaction_button.dataset.count = Number(reaction_button.dataset.count) + 1;
+        count_span.innerHTML = reaction_button.dataset.count;
+    }
+}
+
+function react(reaction){
+    const now = new Date;
+    //The button that was clicked needs to reflect this reaction has incremented
+    const reaction_button = document.getElementById("react-"+reaction+"-button");
+    if(!reaction_button.dataset.count){
+        reaction_button.dataset.count = 0;
+    }
+    const count_span = reaction_button.querySelector(".count");
+    reaction_button.dataset.count = Number(reaction_button.dataset.count) + 1;
+    count_span.innerHTML = reaction_button.dataset.count;
+    patch_task(task_id, [
+        {"op": "add", "path": "/reactions/-", "value": {
+                subject: {
+                    id: subject_id,
+                    name: subject_name,
+                    email: subject_email,
+                },
+                reaction: reaction,
+                created: now.toISOString(),
+            },
+        }
+    ]);
+}
+window.react = react;
+
+function add_comment(){
+    const now = new Date;
+    const comment_input = document.getElementById("comment-input");
+    const comment = comment_input.value;
+    patch_task(task_id, [
+        {"op": "add", "path": "/comments/-", "value": {
+                subject: {
+                    id: subject_id,
+                    name: subject_name,
+                    email: subject_email,
+                },
+                comment: comment,
+                content_type: "text/plain",
+                created: now.toISOString(),
+            },
+        }
+    ]);
+    comment_input.value = "";
+    //Add a section for this comment
+    const comments_section = document.getElementById("comments");
+    let ce = document.createElement("article");
+    ce.name = "comment"
+    ce.className = "comment"
+    ce.innerHTML = "<div>"+comment+"</div><footer>By "+subject_name+" right now</footer>";
+    comments_section.appendChild(ce);
+}
+window.add_comment = add_comment;
         </script>
     </head>
-    <body>
-        <header><h1>TASK-{{task.id}}: {{task.title}}</h1></header>
+    <body onload="on_load()">
+        <!-- TODO Create this list in handlebards from a query to the users db for the users in the task circle -->
+        <datalist id="users">
+            <option data-id="1" data-email="murphysean84@gmail.com" data-name="Sean Murphy" value="Sean Murphy">Sean Murphy</option>
+            <option data-id="2" data-email="tucker.s.murphy@gmail.com" data-name="Tucker Murphy" value="Tucker Murphy">Tucker Murphy</option>
+            <option data-id="3" data-email="skye.s.murphy@gmail.com" data-name="Skye Murphy" value="Skye Murphy">Skye Murphy</option>
+            <option data-id="4" data-email="kianna.n.murphy@gmail.com" data-name="Kianna Murphy" value="Kianna Murphy">Kianna Murphy</option>
+        </datalist>
+        <datalist id="priorities">
+            <option data-priority="neutral" value="neutral">Neutral</option>
+            <option data-priority="trivial" value="trivial">Trivial</option>
+            <option data-priority="minor" value="minor">Minor</option>
+            <option data-priority="major" value="major">Major</option>
+            <option data-priority="critical" value="critical">Critical</option>
+            <option data-priority="blocker" value="blocker">Blocker</option>
+        </datalist>
+        <datalist id="states">
+            <option data-state="blocked" data-reason="waiting-on-other" value="Blocked (Waiting on Other)">Blocked (Waiting on Other)</option>
+            <option data-state="blocked" data-reason="needs-information" value="Blocked (Needs Information)">Blocked (Needs Information)</option>
+            <option data-state="blocked" data-reason="needs-planning" value="Blocked (Needs Planning)">Blocked (Needs Planning)</option>
+            <option data-state="blocked" data-reason="needs-materials" value="Blocked (Needs Materials)">Blocked (Needs Materials)</option>
+            <option data-state="blocked" data-reason="needs-tools" value="Blocked (Needs Tools)">Blocked (Needs Tools)</option>
+            <option data-state="blocked" data-reason="insufficient-budget" value="Blocked (Insufficient Budget)">Blocked (Insufficient Budget)</option>
+            <option data-state="blocked" data-reason="required-authorization" value="Blocked (Requires Authorization)">Blocked (Requires Authorization)</option>
+            <option data-state="todo" value="Todo">Todo</option>
+            <option data-state="in-progress" value="In Progress">In Progress</option>
+            <option data-state="in-review" value="In Review"></option>
+            <option data-state="complete" data-resolution="done" value="Complete (Done)">Complete (Done)</option>
+            <option data-state="complete" data-resolution="nothing-to-do" value="Complete (Nothing to do)">Complete (Nothing to do)</option>
+            <option data-state="complete" data-resolution="wont-do" value="Complete (Wont Do)">Complete (Wont Do)</option>
+            <option data-state="complete" data-resolution="cancelled" value="Complete (Cancelled)">Complete (Cancelled)</option>
+            <option data-state="complete" data-resolution="duplicate" value="Complete (Duplicate)">Complete (Duplicate)</option>
+            <option data-state="complete" data-resolution="closed-for-age" value="Complete (Closed for Age)">Complete (Closed for Age)</option>
+        </datalist>
+        <header>
+            <nav>
+                <a href="/index.html">Home</a>
+                <a href="/login.html">Login</a>
+                <a href="/board.html">Task Board</a>
+            </nav>
+            Welcome {{subject.name}}
+        </header>
+        <h1>TASK-{{task.id}}: {{task.title}}</h1>
         <nav>
             <p><a href="/index.html"/>Home</a></p>
             <p><a href="/board.html">Board</a></p>
@@ -100,6 +288,14 @@ async function patch_task(id,patch){
             <article>
                 <label for="assignee">Assignee:</label>
                 <span id="assignee" name="assignee">{{task.assignee.name}}</span>
+                <form id="assignee-form" class="hide-form" action="javascript:void(0);">
+                    <label for="assignee-input">Change Assignee:</label>
+                    <input id="assignee-input" type="text" list="users" value="{{task.assignee.name}}" oninput="input_assignee(event)"/>
+                    <input type="button" value="Update" onclick="update_assignee()"/>
+                </form>
+                <form id="assign-self-form" class="hide-form" action="javascript:void(0);">
+                    <input type="button" value="Assign Myself" onclick="assign_self()"/>
+                </form>
             </article>
             <article>
                 <label for="priority">Priority:</label>
@@ -115,14 +311,29 @@ async function patch_task(id,patch){
             <article>
                 <label for="estimate">Estimate (8601 time span... P1y2m3dT4h5m6s):</label>
                 <span id="estimate" name="estimate">{{task.estimate}}</span>
+                <form id="estimate-form" class="hide-form" action="javascript:void(0);">
+                    <label for="estimate-input">Change Estimate:</label>
+                    <input id="estimate-input" type="text" value="{{task.estimate}}"/>
+                    <input type="button" value="Update" onclick="update_estimate()"/>
+                </form>
             </article>
             <article>
                 <label for="points">Points:</label>
                 <span id="points" name="points">{{task.points}}</span>
+                <form id="points-form" class="hide-form" action="javascript:void(0);">
+                    <label for="points-input">Change Points:</label>
+                    <input id="points-input" type="text" value="{{task.points}}"/>
+                    <input type="button" value="Update" onclick="update_points()"/>
+                </form>
             </article>
             <article>
                 <label for="state">State:</label>
-                <span id="state" name="state">{{task.state.state}}</span>
+                <span id="state" name="state">{{task.state.state}} {{task.state.reason}} {{task.state.resolution}}</span>
+                <form id="state-form" class="hide-form" action="javascript:void(0);">
+                    <label for="state-input">Change State:</label>
+                    <input id="state-input" type="text" list="states" value="{{task.state.state}}"/>
+                    <input type="button" value="Update" onclick="update_state()"/>
+                </form>
             </article>
             <article>
                 <label for="tags">Tags:</label>
@@ -133,102 +344,41 @@ async function patch_task(id,patch){
                 </form>
             </article>
             <article>
-                <time>Created: {{task.created}}</time>
+                <span>Created: <time id="created" datetime="{{task.created}}">{{task.created}}</time></span>
             </article>
             <article>
-                <time>Updated: {{task.updated}}</time>
+                <span>Updated: <time id="updated" datetime="{{task.updated}}">{{task.updated}}</time></span>
             </article>
             <article>
             <article>
-                <label for="due">Due:</label>
-                <time id="due" name="due" value="{{task.due}}"/>
+                <span>Due: <time id="due" datetime="{{task.due}}">{{task.due}}</time></span>
             </article>
         </section>
         <script>
-            function count_reactions(){
-                const react_section = document.getElementById("reactions");
-                for (ra of react_section.children){
-                    const reaction = ra.dataset.reaction;
-                    const reaction_button = document.getElementById("react-"+reaction+"-button");
-                    if(!reaction_button.dataset.count){
-                        reaction_button.dataset.count = 0;
-                    }
-                    const count_span = reaction_button.querySelector(".count");
-                    reaction_button.dataset.count = Number(reaction_button.dataset.count) + 1;
-                    count_span.innerHTML = reaction_button.dataset.count;
-                }
-            }
-            function react(reaction){
-                const now = new Date;
-                //The button that was clicked needs to reflect this reaction has incremented
-                const reaction_button = document.getElementById("react-"+reaction+"-button");
-                if(!reaction_button.dataset.count){
-                    reaction_button.dataset.count = 0;
-                }
-                const count_span = reaction_button.querySelector(".count");
-                reaction_button.dataset.count = Number(reaction_button.dataset.count) + 1;
-                count_span.innerHTML = reaction_button.dataset.count;
-                patch_task(task_id, [
-                    {"op": "add", "path": "/reactions/-", "value": {
-                            subject: {
-                                id: subject_id,
-                                name: subject_name,
-                                email: subject_email,
-                            },
-                            reaction: reaction,
-                            created: now.toISOString(),
-                        },
-                    }
-                ]);
-            }
-            function add_comment(){
-                const now = new Date;
-                const comment_input = document.getElementById("comment-input");
-                const comment = comment_input.value;
-                patch_task(task_id, [
-                    {"op": "add", "path": "/comments/-", "value": {
-                            subject: {
-                                id: subject_id,
-                                name: subject_name,
-                                email: subject_email,
-                            },
-                            comment: comment,
-                            content_type: "text/plain",
-                            created: now.toISOString(),
-                        },
-                    }
-                ]);
-                comment_input.value = "";
-                //TODO Add a section for this comment
-                const comments_section = document.getElementById("comments");
-                let ce = document.createElement("article");
-                ce.name = "comment"
-                ce.className = "comment"
-                ce.innerHTML = "<div>"+comment+"</div><footer>By "+subject_name+" right now</footer>";
-                comments_section.appendChild(ce);
-            }
         </script>
         <section>
             <header><h3>Reactions</h3></header>
             <section id="reactions" class="reactions" style="display: none;">
                 {{#each task.reactions}}<article data-reaction="{{reaction}}"><span name="subject-name">{{subject.name}}</span><span class="material-symbols-outlined">{{reaction}}</span></article>{{/each}}
             </section>
-            <button id="react-sentiment_very_satisfied-button" onclick="react('sentiment_very_satisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_very_satisfied</span></button>
-            <button id="react-sentiment_satisfied-button" onclick="react('sentiment_satisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_satisfied</span></button>
-            <button id="react-sentiment_neutral-button" onclick="react('sentiment_neutral')"><span class="count"></span><span class="material-symbols-outlined">sentiment_neutral</span></button>
-            <button id="react-sentiment_dissatisfied-button" onclick="react('sentiment_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_dissatisfied</span></button>
-            <button id="react-sentiment_very_dissatisfied-button" onclick="react('sentiment_very_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_very_dissatisfied</span></button>
-            <button id="react-sentiment_extremely_dissatisfied-button" onclick="react('sentiment_extremely_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_extremely_dissatisfied</span></button>
-            <button id="react-sentiment_sad-button" onclick="react('sentiment_sad')"><span class="count"></span><span class="material-symbols-outlined">sentiment_sad</span></button>
-            <button id="react-sentiment_calm-button" onclick="react('sentiment_calm')"><span class="count"></span><span class="material-symbols-outlined">sentiment_calm</span></button>
-            <button id="react-sentiment_excited-button" onclick="react('sentiment_excited')"><span class="count"></span><span class="material-symbols-outlined">sentiment_excited</span></button>
-            <button id="react-sentiment_stressed-button" onclick="react('sentiment_stressed')"><span class="count"></span><span class="material-symbols-outlined">sentiment_stressed</span></button>
-            <button id="react-sentiment_frustrated-button" onclick="react('sentiment_frustrated')"><span class="count"></span><span class="material-symbols-outlined">sentiment_frustrated</span></button>
-            <button id="react-sentiment_content-button" onclick="react('sentiment_content')"><span class="count"></span><span class="material-symbols-outlined">sentiment_content</span></button>
-            <button id="react-sentiment_worried-button" onclick="react('sentiment_worried')"><span class="count"></span><span class="material-symbols-outlined">sentiment_worried</span></button>
-            <button id="react-mood-button" onclick="react('mood')"><span class="count"></span><span class="material-symbols-outlined">mood</span></button>
-            <button id="react-mood_bad-button" onclick="react('mood_bad')"><span class="count"></span><span class="material-symbols-outlined">mood_bad</span></button>
-            <button id="react-sick-button" onclick="react('sick')"><span class="count"></span><span class="material-symbols-outlined">sick</span></button>
+            <form id="reactions-form" class="hide-form" action="javascript:void(0);">
+                <button id="react-sentiment_very_satisfied-button" onclick="react('sentiment_very_satisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_very_satisfied</span></button>
+                <button id="react-sentiment_satisfied-button" onclick="react('sentiment_satisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_satisfied</span></button>
+                <button id="react-sentiment_neutral-button" onclick="react(sentiment_neutral)"><span class="count"></span><span class="material-symbols-outlined">sentiment_neutral</span></button>
+                <button id="react-sentiment_dissatisfied-button" onclick="react('sentiment_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_dissatisfied</span></button>
+                <button id="react-sentiment_very_dissatisfied-button" onclick="react('sentiment_very_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_very_dissatisfied</span></button>
+                <button id="react-sentiment_extremely_dissatisfied-button" onclick="react('sentiment_extremely_dissatisfied')"><span class="count"></span><span class="material-symbols-outlined">sentiment_extremely_dissatisfied</span></button>
+                <button id="react-sentiment_sad-button" onclick="react('sentiment_sad')"><span class="count"></span><span class="material-symbols-outlined">sentiment_sad</span></button>
+                <button id="react-sentiment_calm-button" onclick="react('sentiment_calm')"><span class="count"></span><span class="material-symbols-outlined">sentiment_calm</span></button>
+                <button id="react-sentiment_excited-button" onclick="react('sentiment_excited')"><span class="count"></span><span class="material-symbols-outlined">sentiment_excited</span></button>
+                <button id="react-sentiment_stressed-button" onclick="react('sentiment_stressed')"><span class="count"></span><span class="material-symbols-outlined">sentiment_stressed</span></button>
+                <button id="react-sentiment_frustrated-button" onclick="react('sentiment_frustrated')"><span class="count"></span><span class="material-symbols-outlined">sentiment_frustrated</span></button>
+                <button id="react-sentiment_content-button" onclick="react('sentiment_content')"><span class="count"></span><span class="material-symbols-outlined">sentiment_content</span></button>
+                <button id="react-sentiment_worried-button" onclick="react('sentiment_worried')"><span class="count"></span><span class="material-symbols-outlined">sentiment_worried</span></button>
+                <button id="react-mood-button" onclick="react('mood')"><span class="count"></span><span class="material-symbols-outlined">mood</span></button>
+                <button id="react-mood_bad-button" onclick="react('mood_bad')"><span class="count"></span><span class="material-symbols-outlined">mood_bad</span></button>
+                <button id="react-sick-button" onclick="react('sick')"><span class="count"></span><span class="material-symbols-outlined">sick</span></button>
+            </form>
         </section>
         <section>
             <header><h3>Comments</h3></header>
@@ -238,11 +388,12 @@ async function patch_task(id,patch){
                     <footer>By {{subject.name}} on {{created}}</footer>
                 </article>{{/each}}{{#if subject.id}}
             </section>
-            <input id="comment-input" type="text">
-            <input type="button" value="Add Comment" onclick="add_comment()"/>{{/if}}
+            <form id="comments-form" class="hide-form" action="javascript:void(0);">
+                <label for="comment-input">Add a Comment:</label>
+                <textarea id="comment-input" name="comment" rows="10" cols="120"></textarea>
+                <input type="button" value="Add Comment" onclick="add_comment()"/>{{/if}}
+            </form>
         </section>
-            <p>Reviews: {{task.reviews}}</p>
-            <p>History: {{task.history}}</p>
         <section id="history">
             {{#each task.history}}<article id="history-{{@index}}">
                 <div>Updates by {{subject.name}} on {{patched}}</div>
@@ -250,7 +401,6 @@ async function patch_task(id,patch){
         </section>
         <footer>{{task.history}}</footer>
         <script>
-            count_reactions();
         </script>
     </body>
 </html>

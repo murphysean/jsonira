@@ -1,52 +1,55 @@
+export const name = "task";
 
-const title_input = document.getElementById("title");
-const reporter_span = document.getElementById("reporter");
-const watchers_form = document.getElementById("watchers");
-const add_watcher_input = document.getElementById("watcher");
-const circle_input = document.getElementById("circle");
-const assignee_input = document.getElementById("assignee");
-const priority_input = document.getElementById("priority");
-const estimate_input = document.getElementById("estimate");
-const points_input = document.getElementById("points");
-const state_input = document.getElementById("state");
-const tags_form = document.getElementById("tags");
-const add_tag_input = document.getElementById("tag");
-const due_input = document.getElementById("due");
+const title_e = document.getElementById("title");
+const title_input = document.getElementById("title-input");
+const reporter_e = document.getElementById("reporter");
+const watchers_e = document.getElementById("watchers");
+const watcher_input = document.getElementById("watcher-input");
+const circle_e = document.getElementById("circle");
+const circle_input = document.getElementById("circle-input");
+const assignee_e = document.getElementById("assignee");
+const assignee_input = document.getElementById("assignee-input");
+const priority_e = document.getElementById("priority")
+const priority_input = document.getElementById("priority-input");
+const estimate_e = document.getElementById("estimate");
+const estimate_input = document.getElementById("estimate-input");
+const points_e = document.getElementById("points");
+const points_input = document.getElementById("points-input");
+const state_e = document.getElementById("state");
+const state_input = document.getElementById("state-input");
+const tags_e = document.getElementById("tags");
+const tag_input = document.getElementById("tag-input");
+const created_e = document.getElementById("created");
+const updated_e = document.getElementById("updated");
+const due_e = document.getElementById("due");
+const due_input = document.getElementById("due-input");
+const description_e = document.getElementById("description");
 const description_input = document.getElementById("description");
-const comments_section = document.getElementById("comments");
-const add_comment_input = document.getElementById("comment");
+const comments_e = document.getElementById("comments");
+const comment_input = document.getElementById("comment-input");
 
-let authenticated_user = null;
-let current_task = null;
+export let authenticated_user = null;
+export let current_task = null;
 
-
-//Won't fire because I'm loaded after the page is loaded
-function on_load(){
-    check_session();
+export function set_current_task(task){
+    current_task = task;
+}
+export function set_authenticated_user(user){
+    authenticated_user = user;
 }
 
-function task_from_html(){
+/// Attempts to convert the page with properly tagged elements into a task
+export function task_from_inputs(){
     const now = new Date;
     let task = {};
 
     if (title_input.value){
         task.title = title_input.value;
     }
-    if (reporter_span){
-        if(reporter_span.dataset){
-            task.reporter = {
-                id: reporter_span.dataset.id,
-                name: reporter_span.dataset.name,
-                email: reporter_span.dataset.email,
-            };
-        }
-    }
     let watchers = [];
-    for  (child of watchers_form.children){
-        if (child.checked){
-            let user = get_user_from_dataset(child);
-            watchers.push(user);
-        }
+    for  (child of watchers.children){
+        let user = get_user_from_dataset(child);
+        watchers.push(user);
     }
     task.watchers = watchers;
     if (circle_input.value){
@@ -81,18 +84,10 @@ function task_from_html(){
         }
     }
     let tags = [];
-    for (child of tags_form){
-        if (child.checked){
-            tags.push(child.value);
-        }
+    for (child of tags_e){
+        tags.push(child.dataset.tag);
     }
     task.tags = tags;
-    if (created.innerText){
-        task.created = now.toISOString();
-    }
-    if (created.innerText){
-        task.updated = now.toISOString();
-    }
     if (due_input.value){
         task.due = due_input.value;
     }
@@ -103,11 +98,12 @@ function task_from_html(){
     return task;
 }
 
-function reset_view(){
+/// This will reset all inputs to an empty value
+export function reset_view(){
     current_task = null;
     title_input.value = "";
-    reporter_span.innerText = "";
-    watchers_form.replaceChildren();
+    reporter_e.innerText = "";
+    watchers_e.replaceChildren();
     circle_input.value = "";
     assignee_input.value = "";
     priority_input.value = "";
@@ -115,28 +111,34 @@ function reset_view(){
     points_input.value = "";
     state_input.value = "";
     //Clear tags
-    tags_form.replaceChildren();
-    created.innerText = ""
-    updated.innerText = ""
+    tags_e.replaceChildren();
+    created_e.innerText = ""
+    updated_e.innerText = ""
     due_input.value = "";
     description_input.value = "";
     //Clear comments
-    comments_section.replaceChildren();
-    add_comment_input.value = "";
+    comments_e.replaceChildren();
+    comment_input.value = "";
 }
 
-function update_view(task){
+/// Given a task this will populate all the input values to match
+export function update_view(task){
+    reset_view();
     title_input.value = task.title;
-    reporter_span.innerText = task.reporter.name;
-    reporter_span.dataset = task.reporter;
-    //Fix issue here
+    reporter_e.dataset.id = task.reporter.id;
+    reporter_e.dataset.name = task.reporter.name;
+    reporter_e.dataset.email = task.reporter.email;
+    reporter_e.innerText = task.reporter.name;
     for (w of task.watchers){
         add_watcher(w);
     }
-    circle_input.value = task.circle;
     if(task.assignee){
+        assignee_input.dataset.id = task.assignee.id;
+        assignee_input.dataset.name = task.assignee.name;
+        assignee_input.dataset.email = task.assignee.email;
         assignee_input.value = task.assignee.name;
     }
+    circle_input.value = task.circle;
     priority_input.value = task.priority;
     estimate_input.value = task.estimate;
     points_input.value = task.points;
@@ -145,8 +147,11 @@ function update_view(task){
     for (t of task.tags){
         add_tag(t);
     }
-    created.innerText = task.created;
-    updated.innerText = task.updated;
+    created_e.datetime = task.created;
+    created_e.innerText = task.created;
+    updated_e.datetime = task.updated;
+    updated_e.innerText = task.updated;
+    due_e.datetime = task.due;
     due_input.value = task.due;
     description_input.value = task.description;
     //Build comments
@@ -155,8 +160,8 @@ function update_view(task){
     }
 }
 
-async function check_session() {
-    //TODO Check if I am currently authenticated
+export async function check_session() {
+    //Check if I am currently authenticated
     try{
         const response = await fetch("/session");
         if (response.ok){
@@ -172,7 +177,7 @@ async function check_session() {
     }
 }
 
-async function get_task(id){
+export async function get_task(id){
     try{
         const response = await fetch("/api/tasks/" + id)
         if (response.ok){
@@ -191,8 +196,8 @@ async function get_task(id){
     }
 }
 
-//Sends a patch request with the given task document as regular json
-async function merge_task(id,task){
+/// Sends a patch request with the given task document as regular json
+export async function merge_task(id,task){
     try{
         let request = new Request("/api/tasks/" + id, {
             method: "PATCH",
@@ -212,8 +217,8 @@ async function merge_task(id,task){
     }
 }
 
-//Sends a patch request with the given patch document as a patch
-async function patch_task(id,patch){
+/// Sends a patch request with the given patch document as a patch
+export async function patch_task(id,patch){
     try{
         let request = new Request("/api/tasks/" + id, {
             method: "PATCH",
@@ -233,7 +238,9 @@ async function patch_task(id,patch){
     }
 }
 
-async function create_task(task){
+/// Creates a new task on the server
+/// Could be used to clone a task
+export async function create_task(task){
     const now = new Date;
     if(!task){
         task = task_from_html();
@@ -261,7 +268,9 @@ async function create_task(task){
     }
 }
 
-function get_user_from_dataset(element) {
+/// This function will extract a user from any element
+/// It uses the dataset api, so those will need to be set with id,name,email
+export function get_user_from_dataset(element) {
     let user = {};
     user.id = Number(element.dataset.id);
     user.name = element.dataset.name;
@@ -326,13 +335,16 @@ function update_circle_from_input(){
     }
 }
 
-function update_assignee_from_input(){
+export function update_assignee_from_input(){
     if(assignee_input.value){
         let assignee = {};
         let v = assignee_input.value;
-        let option = document.querySelector("#users option[value='" + v + "']");
-        if(option){
-            assignee = get_user_from_dataset(option);
+        if(assignee_input.dataset && assignee_input.dataset.name){
+            assignee.id = Number(assignee_input.dataset.id);
+            assignee.name = assignee_input.dataset.name;
+            assignee.email = assignee_input.dataset.email;
+        }else if(document.querySelector("#users option[value='" + v + "']")){
+            assignee = get_user_from_dataset(document.querySelector("#users option[value='" + v + "']"));
         }else{
             assignee = {id: null, email: v, name:v};
         }
@@ -342,6 +354,25 @@ function update_assignee_from_input(){
             patch_task(current_task.id, [
                 {"op": "replace", "path": "/assignee", "value": assignee}
             ]);
+        }
+        assignee_e.dataset.id = assignee_input.dataset.id;
+        assignee_e.dataset.name = assignee_input.dataset.name;
+        assignee_e.dataset.email = assignee_input.dataset.email;
+        assignee_e.innerText = assignee.name;
+    }
+}
+
+export function update_assignee_from_authenticated_user(){
+    if(authenticated_user){
+        if(current_task){
+            current_task.assignee = authenticated_user;
+            patch_task(current_task.id, [
+                {"op": "replace", "path": "/assignee", "value": authenticated_user}
+            ]);
+            assignee_e.dataset.id = authenticated_user.id;
+            assignee_e.dataset.name = authenticated_user.name;
+            assignee_e.dataset.email = authenticated_user.email;
+            assignee_e.innerText = authenticated_user.name;
         }
     }
 }
@@ -354,11 +385,13 @@ function update_priority_from_input(){
             patch_task(current_task.id, [
                 {"op": "replace", "path": "/priority", "value": priority_input.value}
             ]);
+            //TODO Priority is a bit tricky
+            priority_e.innerText = priority_input.value;
         }
     }
 }
 
-function update_estimate_from_input(){
+export function update_estimate_from_input(){
     if(estimate_input.value){
         //If I have an active task on the page then send it up as an individual patch
         if(current_task){
@@ -366,11 +399,12 @@ function update_estimate_from_input(){
             patch_task(current_task.id, [
                 {"op": "replace", "path": "/estimate", "value": estimate_input.value}
             ]);
+            estimate_e.innerText = estimate_input.value;
         }
     }
 }
 
-function update_points_from_input(){
+export function update_points_from_input(){
     if(points_input.value){
         //If I have an active task on the page then send it up as an individual patch
         if(current_task){
@@ -378,11 +412,12 @@ function update_points_from_input(){
             patch_task(current_task.id, [
                 {"op": "replace", "path": "/points", "value": Number(points_input.value)}
             ]);
+            points_e.innerText = points_input.value;
         }
     }
 }
 
-function update_state_from_input(){
+export function update_state_from_input(){
     if(state_input.value){
         let state = {};
         let v = state_input.value;
@@ -399,6 +434,7 @@ function update_state_from_input(){
                 patch_task(current_task.id, [
                     {"op": "replace", "path": "/state", "value": state}
                 ]);
+                document.getElementById("state").innerText = state.state;
             }
         }
     }

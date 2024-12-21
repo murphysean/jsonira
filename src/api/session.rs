@@ -1,6 +1,8 @@
 use axum::extract::State;
+use axum::http::uri::Scheme;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
+use axum::http::Uri;
 use axum::Form;
 use axum::Json;
 use serde::Deserialize;
@@ -26,26 +28,31 @@ impl SimpleErr {
 
 pub async fn get_current_session(
     State(state): State<AppState>,
+    //uri: Uri,
     auth_ctx: AuthContext,
 ) -> Result<(HeaderMap, Json<User>), StatusCode> {
-    println!("HERE 1");
+    let mut secure_attr = "";
+    //if uri.scheme() == Some(&Scheme::HTTPS){
+    //    secure_attr = "; Secure";
+    //}
     let Subject::User(user) = auth_ctx.subject else {
+        println!("Huh...");
         return Err(StatusCode::UNAUTHORIZED);
     };
-    println!("HERE 2");
     let Some(id) = user.id else {
+        println!("oh...");
         return Err(StatusCode::UNAUTHORIZED);
     };
-    println!("HERE 3");
+    println!("interesting...");
     let mut headers = HeaderMap::new();
     if let Ok(user) = state.user_db.read_user(id).await {
         let token = user.create_token(&state.token_secret).unwrap();
-        println!("HERE 4");
         headers.insert(
             "Set-Cookie",
             format!(
-                "session={}; path=/; HttpOnly; SameSite=Strict; Secure",
-                token
+                "session={}; path=/; HttpOnly; SameSite=Strict{}",
+                token,
+                secure_attr
             )
             .parse()
             .unwrap(),
@@ -58,8 +65,14 @@ pub async fn get_current_session(
 #[axum::debug_handler]
 pub async fn handle_post_login(
     State(state): State<AppState>,
+    uri: Uri,
     Form(form): Form<HashMap<String, String>>,
 ) -> Result<(HeaderMap, StatusCode), StatusCode> {
+    println!("Scheme {:?}", uri.scheme());
+    let mut secure_attr = "";
+    if uri.scheme() == Some(&Scheme::HTTPS){
+        secure_attr = "; Secure";
+    }
     let email = form.get("username").ok_or(StatusCode::BAD_REQUEST)?;
     let password = form.get("password").ok_or(StatusCode::BAD_REQUEST)?;
     let mut headers = HeaderMap::new();
@@ -70,8 +83,9 @@ pub async fn handle_post_login(
             headers.insert(
                 "Set-Cookie",
                 format!(
-                    "session={}; path=/; HttpOnly; SameSite=Strict; Secure",
-                    token
+                    "session={}; path=/; HttpOnly; SameSite=Strict{}",
+                    token,
+                    secure_attr
                 )
                 .parse()
                 .unwrap(),

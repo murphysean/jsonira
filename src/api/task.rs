@@ -12,7 +12,7 @@ use tracing::{debug, error};
 
 use crate::model::{
     subject::{AuthContext, Subject},
-    task::{Task, TaskState},
+    task::{Action, Task, TaskState},
 };
 
 use crate::AppState;
@@ -37,7 +37,7 @@ pub async fn tasks_get(
 ) -> Result<Json<Vec<Task>>, (StatusCode, String)> {
     let mut limit = query.limit;
     if limit == 0 {
-        limit = 100
+        limit = 500
     };
     let Subject::User(user) = auth_ctx.subject else {
         return Err((
@@ -141,6 +141,7 @@ pub async fn task_patch(
             String::from("Authenticated Subject is not a user"),
         ));
     };
+    let now: Timestamp = Timestamp::now();
     let task = match state.task_db.read_task(id).await {
         Ok(task) => task,
         Err(error) => Err((StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?,
@@ -157,34 +158,58 @@ pub async fn task_patch(
                 error!(error= %e);
                 (StatusCode::BAD_REQUEST, e.to_string())
             })?;
-            //TODO Do buisness logic on the patch set
-            task.policy(&auth_ctx, &patch);
+            //Do buisness logic on the patch set
+            let (decision, str) = task.policy(&auth_ctx, &patch);
+            if let Decision::Deny = decision{
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    String::from(str),
+                ));
+            }
             json_patch::patch(&mut doc, &patch).map_err(|e| {
                 error!(error= %e);
                 (StatusCode::BAD_REQUEST, e.to_string())
             })?;
-            //TODO Create an Action wrapping this patch and append it to the task history
+            //Create an Action wrapping this patch and append it to the task history
+            let action = Action{
+                subject: auth_ctx.subject.clone(),
+                patched: now,
+                patch,
+            };
+            if let Some(mut h) = task.history {
+                h.push(action);
+            }
         }
         Some(hv) if hv == HeaderValue::from_static("application/json") => {
             let patch: Value = from_str(&body).map_err(|e| {
                 error!(error= %e);
                 (StatusCode::BAD_REQUEST, e.to_string())
             })?;
-            let proposed_task: Task = from_value(patch.clone()).map_err(|e| {
+            let mut proposed_task: Task = from_value(patch.clone()).map_err(|e| {
                 error!(error= %e);
                 (StatusCode::BAD_REQUEST, e.to_string())
             })?;
+            proposed_task.updated = Some(now);
             let proposed_action = proposed_task.generate_action(auth_ctx.subject.clone());
-            //TODO Do buisness logic on the patch set
-            task.policy(&auth_ctx, &proposed_action.patch);
+            //Do buisness logic on the patch set
+            let (decision, str) = task.policy(&auth_ctx, &proposed_action.patch);
+            if let Decision::Deny = decision{
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    String::from(str),
+                ));
+            }
             json_patch::merge(&mut doc, &patch);
-            //TODO Create an Action wrapping this patch and append it to the task history
+            //Create an Action wrapping this patch and append it to the task history
+            if let Some(mut h) = task.history {
+                h.push(proposed_action);
+            }
         }
         _ => {
             return Err((
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
                 String::from("Unsupported media type"),
-            ))
+            ));
         }
     }
     let mut task: Task = from_value(doc).map_err(|e| {

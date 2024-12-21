@@ -131,7 +131,11 @@
             </article>
         </section>
         <nav>
-            <p>Load Task From local storage</p>
+            <form>
+                <label for="get-script-input">Load Script File:</label>
+                <input id="get-script-input" type="file" accept=".json,.yaml,application/json,text/vnd.yaml">
+                <input id="get-script-button" type="button" value="Create Task Batch" onclick="load_script()">
+            </form>
             <p>Create Weekly Tasks</p>
             <p>Create Daily Tasks</p>
             <form>

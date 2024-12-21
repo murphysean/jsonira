@@ -33,17 +33,35 @@
                 flex-direction: column;
                 margin: 5px;
                 max-width: 200px;
+                border: 2px solid black;
             }
+            /*
             [data-priority="neutral"]{background-color: beige;}
             [data-priority="trivial"]{background-color: darkseagreen;}
             [data-priority="minor"]{background-color: palegreen;}
             [data-priority="major"]{background-color: mistyrose;}
             [data-priority="critical"]{background-color: lightsalmon;}
             [data-priority="blocker"]{background-color: lightcoral;}
+            */
+            .expired{
+                background-color: mistyrose;
+            }
+            .today{
+                background-color: darkseagreen;
+            }
+            .tomorrow{
+                background-color: palegreen;
+            }
+            .filtered {
+                display: none;
+            }
             .task > header{
                 text-overflow: ellipsis;
                 overflow: hidden;
                 white-space: nowrap;
+            }
+            .task > article {
+                margin-left: 5px;
             }
             .task > footer{
                 align-self: flex-end;
@@ -83,7 +101,7 @@
                 document.getElementById("tag-header").innerText = params.get('tag');
             }
             async function check_session() {
-                //TODO Check if I am currently authenticated
+                //Check if I am currently authenticated
                 try{
                     const response = await fetch("/session");
                     if (response.ok){
@@ -149,18 +167,37 @@
     <body>
         <!-- Begin Templates -->
          <template id="task-template">
-            <article name="task">
+            <article name="task" class="task" draggable="true">
                 <header>
-                    <a name="task-link"></a>
-                    <span name="task-title"></span>
+                    <a name="task-link" href="/">TASK-0</a>
+                    :
+                    <span name="task-title">Title</span>
                 </header>
-                <!--<article name="task-points"></article>
-                <article name="task-estimate"></article>-->
-                <footer name="task-assignee"></footer>
+                <article>
+                    <span name="task-points">Points</span>
+                    <span name="task-priority">Priority</span>
+                    <span name="task-estimate">Estimate</span>
+                </article>
+                <article name="task-due">Due</article>
+                <footer name="task-assignee">Assignee</footer>
             </article>
          </template>
         <!-- End Templates -->
         <h1 id="tag-header" class="tag-header"></h1>
+        <section>
+            <article>
+                <form>
+                    <label for="mine">Only show tasks Assigned to Me</label>
+                    <input id="mine" type="checkbox" name="mine" value="mine" onchange="filter_tasks()"/>
+                    <label for="expired">Filter Expired Tasks</label>
+                    <input id="expired" type="checkbox" name="expired" value="expired" checked onchange="filter_tasks()"/>
+                    <label for="today">Only Tasks Due Today</label>
+                    <input id="today" type="checkbox" name="today" value="today" checked onchange="filter_tasks()"/>
+                    <label for="tomorrow">Only Tasks Due Today and Tomorrow</label>
+                    <input id="tomorrow" type="checkbox" name="tomorrow" value="tomorrow" checked onchange="filter_tasks()"/>
+                </form>
+            </article>
+        </section>
         <header id="board-header" class="board-header">
             <h2 class="state-header">Blocked</h2>
             <h2 class="state-header">Todo</h2>
@@ -190,6 +227,35 @@
         </section>
     </body>
     <script>
+
+function build_tasks(tasks){
+    for (t of tasks){
+        const state = t.state.state;
+        let e = build_task_element(t);
+        document.getElementById(state).appendChild(e);
+    }
+}
+
+function build_scores(tasks){
+    scores = {};
+    for (t of tasks){
+        if(t.assignee){
+        if(scores[t.assignee.name]){
+            scores[t.assignee.name].total += Number(t.points);
+            if(t.state && t.state.state && t.state.state == "complete"){
+                scores[t.assignee.name].complete += Number(t.points);
+            }
+        }else{
+            scores[t.assignee.name] = {complete:0,total:0};
+            scores[t.assignee.name].total = Number(t.points);
+            if(t.state && t.state.state && t.state.state == "complete"){
+                scores[t.assignee.name].complete = Number(t.points);
+            }
+        }}
+    }
+    build_score_articles(scores);
+}
+
 //Sends a patch request with the given patch document as a patch
 async function patch_task(id,patch){
     try{
@@ -211,37 +277,90 @@ async function patch_task(id,patch){
     }
 }
 
+Date.prototype.addHours = function(h) {
+    this.setTime(this.getTime() + (h*60*60*1000));
+    return this;
+}
+
 async function get_tasks(query_string){
     try{
         const response = await fetch("/api/tasks" + query_string)
         if (response.ok){
             const json = await response.json();
             tasks = json;
-            scores = {};
-            for (t of tasks){
-                if(t.assignee){
-                if(scores[t.assignee.name]){
-                    scores[t.assignee.name].total += Number(t.points);
-                    if(t.state && t.state.state && t.state.state == "complete"){
-                        scores[t.assignee.name].complete += Number(t.points);
-                    }
-                }else{
-                    scores[t.assignee.name] = {complete:0,total:0};
-                    scores[t.assignee.name].total = Number(t.points);
-                    if(t.state && t.state.state && t.state.state == "complete"){
-                        scores[t.assignee.name].complete = Number(t.points);
-                    }
-                }}
-                let e = build_task_element(t);
-                document.getElementById(t.state.state).appendChild(e);
-            }
-            build_score_articles(scores);
+            build_tasks(tasks);
+            build_scores(tasks);
+            filter_tasks();
         } else {
             throw new Error(`Response status: ${response.status}`);
         }
     } catch (error){
         console.log(error);
     }
+}
+
+function filter_tasks(){
+    const mine = document.getElementById("mine").checked;
+    const expired = document.getElementById("expired").checked;
+    const today = document.getElementById("today").checked;
+    const tomorrow = document.getElementById("tomorrow").checked;
+
+    for (t of document.getElementsByName("task")){
+        //Clear All Styles
+        t.className = "task";
+        //Put back on basics
+        if(t.dataset.mine){t.classList.add("mine");}
+        if(t.dataset.expired){t.classList.add("expired");}
+        if(!t.dataset.assignee_id){t.classList.add("unassigned");}
+
+        let should_show = true;
+        let should_filter = false;
+        let must_show = false;
+        let must_filter = false;
+
+        //Apply filter style to those that need it
+
+        //If the box has been checked, then filter out all tasks not assigned to me 
+        if(mine){
+            if(!t.dataset.mine && !t.dataset.unassigned){should_filter = true;}
+        }
+
+        //If checked, filter out expired tasks
+        if(expired && t.dataset.expired){must_filter = true;}
+
+        //If tomorrow is checked, show only tasks due today or tomorrow
+        if(tomorrow){
+            if(!t.dataset.tomorrow && !t.dataset.today){should_filter = true;}
+        //If today is checked, show only tasks due today
+        }else if (today){
+            if(!t.dataset.today){should_filter = true;}
+        }
+        
+        if(must_show){
+            continue;
+        }
+        if(must_filter){
+            t.classList.add("filtered");
+            continue;
+        }
+        if(should_show && should_filter){
+            t.classList.add("filtered");
+        }else if(should_filter){
+            t.classList.add("filtered");
+        }
+    }
+/*
+    if(task.tags.includes("daily")){
+        //Parse this in local time at the end of the date specified
+        let due = Date.parse(t.due + "T23:59:59")
+        let in_fut = new Date();
+        in_fut.addHours(36);
+        if(due > in_fut.getTime()){
+            console.log("Filtering FUT:", t.id, due, in_fut.getTime());
+            should_filter = true;
+        }
+    }
+*/
 }
 
 function build_score_articles(scores){
@@ -252,35 +371,87 @@ function build_score_articles(scores){
     }
 }
 
-function build_task_element_new(task){
-    let template = document.getElementById("task-template");
-
-    return template;
-}
-
 function build_task_element(task){
-    let article = document.createElement("article");
+    const now = new Date();
+    let template = document.getElementById("task-template");
+    let article = template.content.firstElementChild.cloneNode(true);
+
     article.id = "task-" + task.id;
-    article.name = "task";
     article.dataset.task_id=task.id;
     article.dataset.priority=task.priority;
-    article.className="task";
-    article.draggable="true";
 
     //The task title as the task header
-    let header = document.createElement("header");
-    let a = document.createElement("a");
+    let a = article.querySelector('[name="task-link"]');
     a.href = "/task/" + task.id;
-    a.innerText="TASK-" + task.id + ": ";
-    header.appendChild(a);
-    let span = document.createElement("span");
+    a.innerText="TASK-" + task.id;
+    let span = article.querySelector('[name="task-title"]');
+    span.title = task.title;
     span.innerText = task.title;
-    header.appendChild(span);
-    article.appendChild(header);
 
-    //let figure = document.createElement("figure");
+    //Add some css classes for my tasks, unassigned, expired, today tasks, tomorrow tasks, and each tag
+    if(!task.assignee){
+        article.dataset.unassigned = true;
+    }
+    if(task.reporter){
+        article.dataset.reporter_id = task.reporter.id;
+    }
+    if(task.assignee){
+        article.dataset.assignee_id = task.assignee.id;
+    }
+    if(task.assignee && authenticated_user){
+        if(task.assignee.id ==  authenticated_user.id){
+            article.dataset.mine = true;
+        }
+    }
+
+    //Is task expired?
+    if(task.due){
+        //Parse this in local time at the end of the date specified
+        let due = Date.parse(t.due + "T23:59:59");
+        if(due < now.getTime()){
+            article.dataset.expired = true;
+        }
+        let in_24_hours = new Date();
+        in_24_hours.addHours(24);
+        if(due < in_24_hours.getTime() && due > now.getTime()){
+            article.dataset.today = true;
+            article.classList.add("today");
+        }
+        let in_48_hours = new Date();
+        in_48_hours.addHours(48);
+        if(due < in_48_hours.getTime() && due > in_24_hours.getTime()){
+            article.dataset.tomorrow = true;
+            article.classList.add("tomorrow");
+        }
+    }
+    if(task.tags){
+        for(t of t.tags){
+            //article.dataset[t] = true;
+            //article.classList.add(t);
+        }
+    }
+
+    let pspan = article.querySelector('[name="task-priority"]');
+    pspan.innerText = "";
+    pspan.className = "material-symbols-outlined";
+    if(task.priority == "neutral"){ pspan.innerText = "sentiment_neutral"; }
+    if(task.priority == "trivial"){ pspan.innerText = "low_priority"; }
+    if(task.priority == "minor"){ pspan.innerText = "priority"; }
+    if(task.priority == "major"){ pspan.innerText = "warning"; }
+    if(task.priority == "critical"){ pspan.innerText = "priority_high"; }
+    if(task.priority == "blocker"){ pspan.innerText = "error"; }
+    pspan.title = task.priority;
+    
+    let points = article.querySelector('[name="task-points"]');
+    points.innerText = task.points;
+    let estimate = article.querySelector('[name="task-estimate"]');
+    estimate.innerText = task.estimate;
+    let due = article.querySelector('[name="task-due"]');
+    due.innerText = task.due;
+
     //Put a footer for the assignee
-    let footer = document.createElement("footer");
+    let footer = article.querySelector('[name="task-assignee"]');
+    footer.innerText = "";
     if(task.assignee){
         footer.textContent = task.assignee.name
     }else{
@@ -298,14 +469,12 @@ function build_task_element(task){
                 }}
             ]);
             let te = document.getElementById("task-"+task.id);
-            te.replaceChildren();
-            te.innerHTML = authenticated_user.name;
+            let tef = te.querySelector('[name="task-assignee"]');
+            tef.replaceChildren();
+            tef.innerHTML = authenticated_user.name;
         });
         footer.appendChild(assign_self);
     }
-    article.appendChild(footer);
-    //let aside = document.createElement("aside");
-    //let p = document.createElement("p");
 
     article.addEventListener("dragstart", dragstart);
     return article;

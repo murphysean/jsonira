@@ -109,12 +109,13 @@ impl TryFrom<Value> for User {
             .get("sub")
             .and_then(|v| v.as_str())
             .and_then(|v| v.parse::<i64>().ok())
-            .or(value.get("id").map(|v| {
-                let ret: i64 = match v {
-                    Value::Number(v) => v.as_i64().unwrap(),
-                    Value::String(s) => s.parse().unwrap(),
-                    _ => i64::default(),
+            .or(value.get("id").and_then(|v| {
+                let ret: Option<i64> = match v {
+                    Value::Number(v) => v.as_i64(),
+                    Value::String(s) => s.parse().ok(),
+                    _ => None,
                 };
+                println!("Deep in here {:?}", ret);
                 ret
             }));
 
