@@ -173,7 +173,7 @@ function react(reaction){
     const count_span = reaction_button.querySelector(".count");
     reaction_button.dataset.count = Number(reaction_button.dataset.count) + 1;
     count_span.innerHTML = reaction_button.dataset.count;
-    patch_task(task_id, [
+    task.patch_task(task_id, [
         {"op": "add", "path": "/reactions/-", "value": {
                 subject: {
                     id: subject_id,
@@ -192,7 +192,7 @@ function add_comment(){
     const now = new Date;
     const comment_input = document.getElementById("comment-input");
     const comment = comment_input.value;
-    patch_task(task_id, [
+    task.patch_task(task_id, [
         {"op": "add", "path": "/comments/-", "value": {
                 subject: {
                     id: subject_id,

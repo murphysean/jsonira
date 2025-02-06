@@ -518,7 +518,12 @@ function to_local_date_string( date ) {
 
 function parse_file_string(file_as_string){
     //let's start assuming it's json
-    let obj = JSON.parse(file_as_string);
+    try {
+        let obj = JSON.parse(file_as_string);
+    } catch (error) {
+        console.error("Error parsing JSON:", error);
+        return;
+    }
 
     //Get now
     let now = new Date();
@@ -527,7 +532,7 @@ function parse_file_string(file_as_string){
 
     let day_plus = day_of_week.getDate();
     //MTWThFSaSu
-    for (i=0;i<7;i++){
+    for (let i=0;i<7;i++){
         day_of_week.setDate(day_plus);
         let day_of_week_string = day_of_week.toLocaleDateString('en-CA', {year: 'numeric', month: '2-digit', day: '2-digit'});
         //Create an unassigned task
@@ -535,7 +540,7 @@ function parse_file_string(file_as_string){
             dt.circle = obj.circle;
             dt.due = day_of_week_string;
             dt.tags = [];
-            dt.tags = dt.tags = dt.tags.concat(obj.tags, ["daily"])
+            dt.tags = dt.tags.concat(obj.tags, ["daily"])
             console.log("Creating", dt);
             create_task(dt);
         }
@@ -545,7 +550,7 @@ function parse_file_string(file_as_string){
                 dt.assignee = p;
                 dt.due = day_of_week_string;
                 dt.tags = [];
-                dt.tags = dt.tags = dt.tags.concat(obj.tags, ["daily", "daily-parent"])
+                dt.tags = dt.tags.concat(obj.tags, ["daily", "daily-parent"])
                 console.log("Creating", dt);
                 create_task(dt);
             }
@@ -556,7 +561,7 @@ function parse_file_string(file_as_string){
                 dt.assignee = c;
                 dt.due = day_of_week_string;
                 dt.tags = [];
-                dt.tags = dt.tags = dt.tags.concat(obj.tags, ["daily", "daily-child"])
+                dt.tags = dt.tags.concat(obj.tags, ["daily", "daily-child"])
                 console.log("Creating", dt);
                 create_task(dt);
             }

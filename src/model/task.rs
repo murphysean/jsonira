@@ -215,7 +215,7 @@ impl Task {
                     //Only allow add to the arrays via /-
                     let allowed_add_paths = vec![
                         "/comments/-",
-                        "/reactions/_",
+                        "/reactions/-",
                         "/reviews/-",
                         "/tags/-",
                         "/watchers/-",
@@ -240,9 +240,8 @@ impl Task {
                         .as_str()
                         .to_owned()
                         .split("/")
-                        .collect::<String>()
-                        .len()
-                        > 1
+                        .count()
+                        > 2
                     {
                         return (Decision::Deny, "Can only replace top level items now");
                     }

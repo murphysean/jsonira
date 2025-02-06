@@ -152,6 +152,7 @@ pub async fn task_patch(
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
     //Check the content type, merge strategy depends on
+    let mut proposed_action: Action;
     match headers.get("content-type") {
         Some(hv) if hv == HeaderValue::from_static("application/json-patch+json") => {
             let patch: Patch = from_str(&body).map_err(|e| {
@@ -171,26 +172,23 @@ pub async fn task_patch(
                 (StatusCode::BAD_REQUEST, e.to_string())
             })?;
             //Create an Action wrapping this patch and append it to the task history
-            let action = Action{
+            proposed_action = Action{
                 subject: auth_ctx.subject.clone(),
                 patched: now,
                 patch,
             };
-            if let Some(mut h) = task.history {
-                h.push(action);
-            }
         }
         Some(hv) if hv == HeaderValue::from_static("application/json") => {
             let patch: Value = from_str(&body).map_err(|e| {
                 error!(error= %e);
                 (StatusCode::BAD_REQUEST, e.to_string())
             })?;
-            let mut proposed_task: Task = from_value(patch.clone()).map_err(|e| {
+            let proposed_task: Task = from_value(patch.clone()).map_err(|e| {
                 error!(error= %e);
                 (StatusCode::BAD_REQUEST, e.to_string())
             })?;
-            proposed_task.updated = Some(now);
-            let proposed_action = proposed_task.generate_action(auth_ctx.subject.clone());
+            //Create an Action wrapping this patch and append it to the task history
+            proposed_action = proposed_task.generate_action(auth_ctx.subject.clone());
             //Do buisness logic on the patch set
             let (decision, str) = task.policy(&auth_ctx, &proposed_action.patch);
             if let Decision::Deny = decision{
@@ -200,10 +198,6 @@ pub async fn task_patch(
                 ));
             }
             json_patch::merge(&mut doc, &patch);
-            //Create an Action wrapping this patch and append it to the task history
-            if let Some(mut h) = task.history {
-                h.push(proposed_action);
-            }
         }
         _ => {
             return Err((
@@ -217,6 +211,10 @@ pub async fn task_patch(
         (StatusCode::BAD_REQUEST, e.to_string())
     })?;
     task.id = Some(id);
+    task.updated = Some(now);
+    if let Some(h) = task.history.as_mut() {
+        h.push(proposed_action);
+    }
     let result = state.task_db.update_task(id, task).await;
     match result.inspect_err(|e| debug!("Error: {}", e)) {
         Ok(user) => Ok(Json(user)),
