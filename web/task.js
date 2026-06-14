@@ -512,14 +512,14 @@ function setToMonday( date ) {
     return date;
 }
 
-function to_local_date_string( date ) {
-    return date.getYear() + "-"
-}
+// take a javascript date and return the beginning of the week
+
 
 function parse_file_string(file_as_string){
     //let's start assuming it's json
+    let obj = null;
     try {
-        let obj = JSON.parse(file_as_string);
+        obj = JSON.parse(file_as_string);
     } catch (error) {
         console.error("Error parsing JSON:", error);
         return;
@@ -542,7 +542,7 @@ function parse_file_string(file_as_string){
             dt.tags = [];
             dt.tags = dt.tags.concat(obj.tags, ["daily"])
             console.log("Creating", dt);
-            create_task(dt);
+            //create_task(dt);
         }
         for (dt of obj.daily_parents){
             for (p of obj.family.parents){
@@ -552,7 +552,7 @@ function parse_file_string(file_as_string){
                 dt.tags = [];
                 dt.tags = dt.tags.concat(obj.tags, ["daily", "daily-parent"])
                 console.log("Creating", dt);
-                create_task(dt);
+                //create_task(dt);
             }
         }
         for (dt of obj.daily_children){
@@ -563,7 +563,7 @@ function parse_file_string(file_as_string){
                 dt.tags = [];
                 dt.tags = dt.tags.concat(obj.tags, ["daily", "daily-child"])
                 console.log("Creating", dt);
-                create_task(dt);
+                //create_task(dt);
             }
         }
         day_plus = day_plus + 1;
@@ -577,7 +577,7 @@ function parse_file_string(file_as_string){
         dt.tags = [];
         dt.tags = dt.tags = dt.tags.concat(obj.tags, ["weekly"])
         console.log("Creating", dt);
-        create_task(dt);
+        //create_task(dt);
     }
     for (dt of obj.weekly_parents){
         for (p of obj.family.parents){
@@ -587,7 +587,7 @@ function parse_file_string(file_as_string){
             dt.tags = [];
             dt.tags = dt.tags = dt.tags.concat(obj.tags, ["weekly", "weekly-parent"])
             console.log("Creating", dt);
-            create_task(dt);
+            //create_task(dt);
         }
     }
     for (dt of obj.weekly_children){
@@ -598,7 +598,7 @@ function parse_file_string(file_as_string){
             dt.tags = [];
             dt.tags = dt.tags = dt.tags.concat(obj.tags, ["weekly", "weekly-child"])
             console.log("Creating", dt);
-            create_task(dt);
+            //create_task(dt);
         }
     }
     

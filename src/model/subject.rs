@@ -294,29 +294,29 @@ mod tests {
         let usub: Subject = from_str(
             r#"{
             id: 1,
-            "email": "murphysean84@gmail.com",
+            "email": "sean@example.com",
             "name": "Sean Murphy"
         }"#,
         )
         .unwrap();
         println!("Subject: {:?}", usub);
         assert_eq!(
-            Subject::UserEmail(String::from("murphysean84@gmail.com")),
+            Subject::UserEmail(String::from("sean@example.com")),
             usub,
         );
         assert_eq!(
             usub,
-            Subject::UserEmail(String::from("murphysean84@gmail.com")),
+            Subject::UserEmail(String::from("sean@example.com")),
         );
     }
 
     #[test]
     fn test_simple_subject_serialization() {
-        let simple_email: Subject = from_str("\"murphysean84@gmail.com\"").unwrap();
+        let simple_email: Subject = from_str("\"sean@example.com\"").unwrap();
         println!("Simple Email: {:?}", simple_email);
         assert_eq!(
             simple_email,
-            Subject::UserEmail(String::from("murphysean84@gmail.com"))
+            Subject::UserEmail(String::from("sean@example.com"))
         );
     }
 
@@ -327,7 +327,7 @@ mod tests {
         let token: Value = from_str(
             r#"{
             "sub": "20",
-            "email": "murphysean84@gmail.com"
+            "email": "sean@example.com"
         }"#,
         )
         .unwrap();
@@ -335,14 +335,14 @@ mod tests {
         let simple_user: User = from_str(
             r#"{
             "id": 20,
-            "email": "murphysean84@gmail.com"
+            "email": "sean@example.com"
         }"#,
         )
         .unwrap();
         assert_eq!(Subject::UserId(20), Subject::User(token_user.clone()),);
         assert_eq!(Subject::UserId(20), Subject::User(simple_user.clone()),);
         assert_eq!(
-            Subject::UserEmail(String::from("murphysean84@gmail.com")),
+            Subject::UserEmail(String::from("sean@example.com")),
             Subject::User(simple_user),
         );
     }

@@ -1,0 +1,6 @@
+From task handlbars troubleshooting
+
+
+
+            <p>Reviews: {{task.reviews}}</p>
+            <p>History: {{task.history}}</p>
